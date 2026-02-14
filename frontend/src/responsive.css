@@ -1,0 +1,336 @@
+/* Responsive Design */
+@media (max-width: 768px) {
+    .hamburger {
+        display: block;
+        padding: 4px 8px !important;
+        font-size: 1.2rem !important;
+        width: auto !important;
+        min-width: auto !important;
+    }
+
+    /* Hide desktop header-actions, show mobile-menu version */
+    .header-actions:not(.mobile-menu) {
+        display: none !important;
+    }
+
+    .dashboard-header {
+        padding: 0 3vw;
+        height: 8vh;
+        max-height: 60px;
+        min-height: 40px;
+        flex-direction: row !important;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .dashboard-header h1 {
+        font-size: 0.85rem;
+    }
+
+    .dashboard-main {
+        padding: 1vh 2vw;
+        display: flex;
+        flex-direction: column;
+        height: 92vh;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1vw;
+        margin-bottom: 1vh;
+        flex-shrink: 0;
+    }
+
+    .stat-card {
+        padding: 1vh 1vw;
+    }
+
+    .stat-label {
+        font-size: 0.7rem;
+        margin-bottom: 2px;
+    }
+
+    .stat-value {
+        font-size: 1.8rem !important;
+    }
+
+    .trend-arrow {
+        font-size: 2.5rem !important;
+    }
+
+    .time-range-container {
+        margin-bottom: 1vh;
+        flex-shrink: 0;
+    }
+
+    .time-range-selector {
+        gap: 1vw;
+        margin-bottom: 0;
+        padding: 1vh 1vw;
+    }
+
+    .date-picker-container {
+        margin-bottom: 1vh;
+    }
+
+    .date-picker {
+        padding: 1vh 2vw;
+        gap: 2vw;
+    }
+
+    .date-nav-btn {
+        padding: 1vh 2vw;
+        font-size: 1rem;
+        min-width: 40px;
+    }
+
+    .date-display {
+        font-size: 0.9rem;
+    }
+
+    .time-btn {
+        padding: 1vh 2vw;
+        font-size: 0.75rem;
+    }
+
+    .chart-container {
+        padding: 0 !important;
+        margin-bottom: 0;
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        border-radius: 4px;
+    }
+
+    #glucose-chart {
+        flex: 1;
+        min-height: 0;
+        height: 100%;
+    }
+
+
+
+    .login-card {
+        padding: 24px;
+    }
+
+    .profile-section {
+        padding: 20px;
+    }
+
+    .secret-value {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .btn-icon {
+        width: 100%;
+    }
+
+    .entries-table {
+        font-size: 0.9rem;
+    }
+
+    .entries-table th,
+    .entries-table td {
+        padding: 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .dashboard-header h1 {
+        font-size: 1.1rem;
+    }
+
+    .dashboard-header {
+        padding: 6px 10px;
+        gap: 6px;
+    }
+
+    .dashboard-main {
+        padding: 6px;
+    }
+
+    .stats-grid {
+        gap: 4px;
+        margin-bottom: 6px;
+    }
+
+    .stat-card {
+        padding: 6px;
+    }
+
+    .stat-label {
+        font-size: 0.65rem;
+    }
+
+    .stat-value {
+        font-size: 1rem;
+    }
+
+    .time-range-selector {
+        gap: 3px;
+        margin-bottom: 6px;
+    }
+
+    .time-btn {
+        padding: 4px 6px;
+        font-size: 0.7rem;
+    }
+
+    .chart-container {
+        padding: 6px;
+        margin-bottom: 0;
+    }
+
+    .chart-container h2 {
+        font-size: 0.85rem;
+        margin-bottom: 3px;
+    }
+
+    .btn-primary,
+    .btn-secondary {
+        font-size: 0.9rem;
+        padding: 10px;
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-header {
+        flex-direction: column;
+        gap: 12px;
+        padding: 12px 16px;
+    }
+
+    .header-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .dashboard-main {
+        padding: 12px;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .stat-card {
+        padding: 12px;
+    }
+
+    .stat-label {
+        font-size: 0.75rem;
+        margin-bottom: 4px;
+    }
+
+    .stat-value {
+        font-size: 1.25rem;
+    }
+
+    .time-range-selector {
+        gap: 6px;
+        margin-bottom: 12px;
+    }
+
+    .time-btn {
+        padding: 6px 12px;
+        font-size: 0.85rem;
+    }
+
+    .chart-container {
+        padding: 12px;
+        margin-bottom: 12px;
+    }
+
+    .chart-container h2 {
+        font-size: 1rem;
+        margin-bottom: 8px;
+    }
+
+    .login-card {
+        padding: 24px;
+    }
+
+    .profile-section {
+        padding: 20px;
+    }
+
+    .secret-value {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .btn-icon {
+        width: 100%;
+    }
+
+    .entries-table {
+        font-size: 0.9rem;
+    }
+
+    .entries-table th,
+    .entries-table td {
+        padding: 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .dashboard-header h1 {
+        font-size: 1.25rem;
+    }
+
+    .dashboard-header {
+        padding: 10px 12px;
+    }
+
+    .dashboard-main {
+        padding: 8px;
+    }
+
+    .stats-grid {
+        gap: 6px;
+        margin-bottom: 8px;
+    }
+
+    .stat-card {
+        padding: 8px;
+    }
+
+    .stat-label {
+        font-size: 0.7rem;
+    }
+
+    .stat-value {
+        font-size: 1.1rem;
+    }
+
+    .time-range-selector {
+        gap: 4px;
+        margin-bottom: 8px;
+    }
+
+    .time-btn {
+        padding: 5px 8px;
+        font-size: 0.75rem;
+    }
+
+    .chart-container {
+        padding: 8px;
+        margin-bottom: 8px;
+    }
+
+    .chart-container h2 {
+        font-size: 0.9rem;
+        margin-bottom: 6px;
+    }
+
+    .btn-primary,
+    .btn-secondary {
+        font-size: 0.9rem;
+        padding: 10px;
+    }
+}

@@ -1,0 +1,37 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import settings
+from app.api.v1.api import api_router
+from app.db.mongo import db
+from app.middleware.logging import LoggingMiddleware
+
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Vite dev server
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Add logging middleware
+app.add_middleware(LoggingMiddleware)
+
+@app.on_event("startup")
+async def startup_db_client():
+    db.connect()
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    db.close()
+
+@app.get("/")
+def root():
+    return {"message": "Welcome to Nightscout SaaS API"}
+
+app.include_router(api_router, prefix=settings.API_V1_STR)
