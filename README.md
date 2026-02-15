@@ -73,8 +73,8 @@ OneTwenty/
 ├── backend_python/     # FastAPI backend (API, WebSockets, Auth)
 ├── frontend/           # Vite + Vanilla JS PWA
 ├── requirements.md     # Detailed product requirements (16 user stories)
-├── design.md           # System design & architecture document
-└── requirements.txt    # Python dependencies
+├── README.md           # This file
+└── design.md           # System design & architecture document
 ```
 
 ---
