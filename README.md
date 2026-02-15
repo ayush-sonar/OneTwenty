@@ -91,6 +91,12 @@ OneTwenty/
 
 ```bash
 cd backend_python
+python -m venv venv
+# On Windows:
+.\venv\Scripts\activate
+# On macOS/Linux:
+source venv/bin/activate
+
 pip install -r requirements.txt
 # Configure environment variables (DB connections, secrets)
 uvicorn main:app --reload
