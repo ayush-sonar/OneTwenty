@@ -10,41 +10,32 @@ router = APIRouter()
 @router.post("/entries/", status_code=201)
 @router.post("/entries.json", status_code=201)
 async def create_entries(
-    entries: Union[List[EntryCreate], EntryCreate],                                                                                                                                                                                                                                                                                                                                             
+    entries: Union[List[EntryCreate], EntryCreate],
+    request: Request = None,
     tenant_id: str = Depends(get_tenant_from_api_key)
 ):
-    """                                                                                 
+    """
     Creates one or more entries for the authenticated tenant.
-    Broadcasts new entries to connected WebSocket clients.
-    """                                                                                                                                                                                  
+    - Normalizes dates (sysTime, utcOffset, dateString) on write
+    - Upserts using (sysTime, type, tenant_id) as dedup key — safe for retried uploads
+    - Returns full array of stored documents (matching original Nightscout response shape)
+    - Broadcasts normalized entries to connected WebSocket clients
+    """
     from app.websocket.manager import manager
-    
+
     service = EntriesService()
-    entry_ids = await service.create_entries(entries, tenant_id)
-    
-    # Broadcast to WebSocket clients
-    entries_list = entries if isinstance(entries, list) else [entries]
-    for entry in entries_list:
-        entry_dict = entry.dict()
-        entry_dict['tenant_id'] = tenant_id
-        
-        # Add Nightscout-compatible fields
-        if 'date' in entry_dict:
-            entry_dict['mills'] = entry_dict['date']
-            if 'dateString' not in entry_dict:
-                from datetime import datetime
-                entry_dict['dateString'] = datetime.fromtimestamp(entry_dict['date'] / 1000).isoformat() + '.000Z'
-            entry_dict['sysTime'] = entry_dict.get('dateString')
-            if 'utcOffset' not in entry_dict:
-                entry_dict['utcOffset'] = 0
-        
-        # Broadcast to all connected clients for this tenant
+    stored_entries = await service.create_entries(entries, tenant_id)
+
+    # Broadcast normalized stored docs to WebSocket clients
+    for entry in stored_entries:
         await manager.broadcast_to_tenant(tenant_id, {
             "type": "new_entry",
-            "data": entry_dict
+            "data": entry,
         })
-    
-    return {"inserted_ids": entry_ids}
+
+    # Return full documents — mirrors original Nightscout POST /entries response
+    return stored_entries
+
 
 @router.get("/entries", status_code=200)
 @router.get("/entries/", status_code=200)
