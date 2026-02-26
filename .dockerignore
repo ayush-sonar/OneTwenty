@@ -27,3 +27,5 @@ secrets.json
 # OS
 .DS_Store
 Thumbs.db
+
+./cgm-remote-monitor/
