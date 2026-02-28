@@ -25,6 +25,10 @@ app.add_middleware(LoggingMiddleware)
 @app.on_event("startup")
 async def startup_db_client():
     db.connect()
+    # Ensure MongoDB indexes exist (idempotent — safe to run on every boot)
+    from app.repositories.entries import EntriesRepository
+    await EntriesRepository().ensure_indexes()
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

@@ -1,214 +1,398 @@
-from fastapi import APIRouter, Depends, Body, Request, Header, HTTPException
-from typing import List, Union, Optional
+"""
+Nightscout-compatible Entries API endpoints.
+
+GET  /entries              — list entries (count, hours, start/end, find[] query)
+GET  /entries/current      — latest SGV entry (JSON or TSV via Accept header)
+GET  /entries/{spec}       — fetch by ObjectId or filter by type (e.g. /entries/sgv)
+POST /entries              — upload entries (upsert, dedup by sysTime+type)
+DELETE /entries            — delete entries matching find[] query
+DELETE /entries/{spec}     — delete by ObjectId or by type
+
+Auth: API secret header → JWT Bearer → subdomain (multi-strategy, same as original NS).
+"""
+
+from __future__ import annotations
+
+import re
+import time as _time
+from datetime import datetime, timezone
+from email.utils import formatdate
+from typing import Any, Dict, List, Optional, Union
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
+
+from app.api.deps import get_tenant_from_api_key
 from app.schemas.entry import EntryCreate
-from app.api.deps import get_tenant_from_api_key, get_tenant_from_jwt
 from app.services.entries import EntriesService
 
 router = APIRouter()
+
+# 24-char hex ObjectId pattern
+_ID_RE = re.compile(r"^[a-f\d]{24}$", re.IGNORECASE)
+
+
+# ---------------------------------------------------------------------------
+# Auth helper — shared across all entries endpoints
+# ---------------------------------------------------------------------------
+
+async def _resolve_tenant(request: Request, api_secret: Optional[str]) -> str:
+    """
+    Multi-strategy auth resolution (mirrors original Nightscout):
+    1. api-secret header
+    2. Authorization: Bearer <jwt>
+    3. Host subdomain
+    Raises 401 if none match.
+    """
+    tenant_id: Optional[str] = None
+
+    if api_secret:
+        tenant_id = get_tenant_from_api_key(request, api_secret)
+
+    if not tenant_id:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            try:
+                from jose import jwt
+                from app.core.config import settings
+                from app.repositories.user import UserRepository
+
+                token = auth_header[7:]
+                payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+                user_id = int(payload.get("sub"))
+                repo = UserRepository()
+                tid = repo.get_tenant_for_user(user_id)
+                tenant_id = str(tid) if tid else None
+            except Exception:
+                pass
+
+    if not tenant_id:
+        from app.api.deps import get_tenant_from_subdomain
+        tenant_id = get_tenant_from_subdomain(request)
+
+    if not tenant_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    return tenant_id
+
+
+def _last_modified_header(entries: List[Dict]) -> Optional[str]:
+    """Return RFC-7231 Last-Modified value from the newest entry, or None."""
+    if not entries:
+        return None
+    newest_ms = max((e.get("date") or e.get("mills") or 0) for e in entries)
+    if newest_ms:
+        return formatdate(newest_ms / 1000, usegmt=True)
+    return None
+
+
+def _check_not_modified(request: Request, last_modified_str: Optional[str]) -> bool:
+    """
+    Return True if the client's If-Modified-Since means we should send 304.
+    Mirrors original Nightscout ifModifiedSinceCTX behavior.
+    """
+    if not last_modified_str:
+        return False
+    ims = request.headers.get("If-Modified-Since")
+    if not ims:
+        return False
+    try:
+        from email.utils import parsedate_to_datetime
+        lm_dt = parsedate_to_datetime(last_modified_str)
+        ims_dt = parsedate_to_datetime(ims)
+        return lm_dt <= ims_dt
+    except Exception:
+        return False
+
+
+def _parse_find_params(request: Request) -> Optional[Dict[str, Any]]:
+    """
+    Parse find[field][op]=value style query params from the raw query string.
+
+    Examples:
+        ?find[sgv][$gte]=120        → {"sgv": {"$gte": "120"}}
+        ?find[type]=sgv             → {"type": "sgv"}
+        ?find[date][$gte]=123456789 → {"date": {"$gte": "123456789"}}
+
+    Type-casting of numeric fields is handled downstream in build_mongo_query().
+    """
+    find: Dict[str, Any] = {}
+    # qs gives us repeated keys; FastAPI exposes raw query string via request.url.query
+    raw_qs = request.url.query
+
+    for part in raw_qs.split("&"):
+        if not part.startswith("find"):
+            continue
+        if "=" not in part:
+            continue
+        key_part, value = part.split("=", 1)
+        # Decode URL encoding
+        from urllib.parse import unquote
+        value = unquote(value)
+        key_part = unquote(key_part)
+
+        # Match: find[field] or find[field][$op]
+        m = re.match(r"find\[([^\]]+)\](?:\[([^\]]+)\])?", key_part)
+        if not m:
+            continue
+        field = m.group(1)
+        op = m.group(2)  # e.g. "$gte", or None for simple equality
+
+        if op:
+            if field not in find:
+                find[field] = {}
+            if isinstance(find[field], dict):
+                find[field][op] = value
+        else:
+            find[field] = value
+
+    return find if find else None
+
+
+def _parse_timestamp(ts: str) -> int:
+    """Parse ISO or numeric Unix-ms timestamp string; returns int milliseconds."""
+    if ts.lstrip("-").isdigit():
+        return int(ts)
+    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    return int(dt.timestamp() * 1000)
+
+
+# ---------------------------------------------------------------------------
+# POST /entries  (all aliases)
+# ---------------------------------------------------------------------------
 
 @router.post("/entries", status_code=201)
 @router.post("/entries/", status_code=201)
 @router.post("/entries.json", status_code=201)
 async def create_entries(
     entries: Union[List[EntryCreate], EntryCreate],
-    request: Request = None,
-    tenant_id: str = Depends(get_tenant_from_api_key)
+    request: Request,
+    tenant_id: str = Depends(get_tenant_from_api_key),
 ):
     """
-    Creates one or more entries for the authenticated tenant.
-    - Normalizes dates (sysTime, utcOffset, dateString) on write
-    - Upserts using (sysTime, type, tenant_id) as dedup key — safe for retried uploads
-    - Returns full array of stored documents (matching original Nightscout response shape)
-    - Broadcasts normalized entries to connected WebSocket clients
+    Upload CGM entries.
+    - Normalizes dates (sysTime, utcOffset, dateString) on write.
+    - Upserts by (sysTime, type, tenant_id) — safe for retried/duplicate uploads.
+    - Returns full array of stored documents (matching original Nightscout shape).
+    - Broadcasts to WebSocket clients.
     """
     from app.websocket.manager import manager
 
     service = EntriesService()
     stored_entries = await service.create_entries(entries, tenant_id)
 
-    # Broadcast normalized stored docs to WebSocket clients
     for entry in stored_entries:
-        await manager.broadcast_to_tenant(tenant_id, {
-            "type": "new_entry",
-            "data": entry,
-        })
+        await manager.broadcast_to_tenant(tenant_id, {"type": "new_entry", "data": entry})
 
-    # Return full documents — mirrors original Nightscout POST /entries response
     return stored_entries
 
 
-@router.get("/entries", status_code=200)
-@router.get("/entries/", status_code=200)
+# ---------------------------------------------------------------------------
+# GET /entries/current  — MUST be declared before /entries/{spec}
+# ---------------------------------------------------------------------------
+
+@router.get("/entries/current")
+@router.get("/entries/current.json")
+async def get_current_entry(
+    request: Request,
+    api_secret: Optional[str] = Header(None, alias="api-secret"),
+):
+    """
+    Latest SGV entry.
+
+    Content negotiation (mirrors original Nightscout):
+    - Accept: application/json (default) → single-element JSON array
+    - Accept: text/plain | text/tab-separated-values → TSV line
+    """
+    tenant_id = await _resolve_tenant(request, api_secret)
+    service = EntriesService()
+
+    entry = await service.get_current_sgv(tenant_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="No entries found")
+
+    lm = _last_modified_header([entry])
+    accept = request.headers.get("Accept", "application/json")
+
+    # TSV response
+    if "text/plain" in accept or "text/tab-separated-values" in accept:
+        tsv = (
+            f'"{entry.get("dateString","")}\t'
+            f'{entry.get("date","")}\t'
+            f'{entry.get("sgv","")}\t'
+            f'"{entry.get("direction","")}"'
+            f'\t"{entry.get("device","")}"'
+            "\n"
+        )
+        resp = PlainTextResponse(content=tsv, media_type="text/plain; charset=utf-8")
+        if lm:
+            resp.headers["Last-Modified"] = lm
+        return resp
+
+    # Default: JSON array (single element)
+    response = JSONResponse(content=[entry])
+    if lm:
+        response.headers["Last-Modified"] = lm
+    return response
+
+
+# ---------------------------------------------------------------------------
+# GET /entries
+# ---------------------------------------------------------------------------
+
+@router.get("/entries")
+@router.get("/entries/")
 async def get_entries(
+    request: Request,
     count: Optional[int] = None,
     hours: Optional[int] = None,
-    start: Optional[str] = None,  # ISO timestamp or Unix timestamp (ms)
-    end: Optional[str] = None,    # ISO timestamp or Unix timestamp (ms)
+    start: Optional[str] = None,
+    end: Optional[str] = None,
     api_secret: Optional[str] = Header(None, alias="api-secret"),
-    request: Request = None
 ):
     """
-    Fetches entries for the authenticated user's tenant.
-    Supports:
-    1. API key (header: api-secret) - for uploaders/write-access clients
-    2. JWT (header: Authorization) - for dashboard/saas users
-    3. Subdomain (URL) - for public/read-only access (if no auth provided)
-    
-    Query parameters:
-    - count: Number of entries to fetch (default: 10)
-    - hours: Time range in hours (e.g., 2, 4, 6, 12, 24). Takes precedence over count.
+    List CGM entries.
+
+    Query parameter priority: find[] > start+end > hours > count (default 10).
+
+    - find[field][$op]=value — full MongoDB-style filter (mirrors original NS)
+      e.g. find[sgv][$gte]=120&find[type]=sgv
+    - start / end — ISO 8601 or Unix ms timestamps
+    - hours — last N hours
+    - count — last N records
     """
-    import time
-    request_start = time.time()
-    
-    tenant_id = None
-
-    # 1. Try API key first (for Nightscout uploaders)
-    auth_start = time.time()
-    if api_secret:
-        # Standard behavior: if key is invalid, 401. 
-        # But we'll let dependency handle exception if we call it directly
-        tenant_id = get_tenant_from_api_key(request, api_secret)
-        print(f"[TIMING] API: API key auth took {(time.time() - auth_start)*1000:.2f}ms")
-
-    # 2. If no API key, check Authorization header (JWT)
-    if not tenant_id:
-        jwt_start = time.time()
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            try:
-                from jose import jwt
-                from app.core.config import settings
-                from app.repositories.user import UserRepository
-                
-                token = auth_header.replace("Bearer ", "")
-                payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-                user_id = int(payload.get("sub"))
-                
-                repo = UserRepository()
-                tenant_id = repo.get_tenant_for_user(user_id)
-                if tenant_id:
-                    tenant_id = str(tenant_id)
-                print(f"[TIMING] API: JWT auth took {(time.time() - jwt_start)*1000:.2f}ms")
-            except Exception as e:
-                print(f"JWT auth failed: {e}")  # Debug logging
-                pass # Invalid JWT, fall through
-        
-    # 3. If still no tenant, try Subdomain (Public Read-Only)
-    if not tenant_id:
-        subdomain_start = time.time()
-        from app.api.deps import get_tenant_from_subdomain
-        tenant_id = get_tenant_from_subdomain(request)
-        print(f"[TIMING] API: Subdomain auth took {(time.time() - subdomain_start)*1000:.2f}ms")
-        
-    if not tenant_id:
-         raise HTTPException(status_code=401, detail="Authentication required (API Key, JWT, or valid Subdomain)")
-    
-    auth_total = time.time()
-    print(f"[TIMING] API: Total auth time {(auth_total - request_start)*1000:.2f}ms")
-    
+    t0 = _time.time()
+    tenant_id = await _resolve_tenant(request, api_secret)
     service = EntriesService()
-    
-    # Priority: start/end > hours > count
-    if start is not None and end is not None:
-        # Convert ISO strings or Unix timestamps to Unix timestamps (ms)
+
+    find = _parse_find_params(request)
+    resolved_count = count or 10
+
+    if find:
+        # find[] takes priority — passes through to MongoDB with type casting/date enforcement
+        result = await service.query_entries(tenant_id, find=find, count=resolved_count)
+    elif start is not None and end is not None:
         try:
-            # Try parsing as Unix timestamp first (numeric string)
-            start_ms = int(start) if start.isdigit() else None
-            end_ms = int(end) if end.isdigit() else None
-            
-            # If not numeric, try parsing as ISO string
-            if start_ms is None:
-                from datetime import datetime
-                start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
-                start_ms = int(start_dt.timestamp() * 1000)
-            if end_ms is None:
-                from datetime import datetime
-                end_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
-                end_ms = int(end_dt.timestamp() * 1000)
-            
-            result = await service.get_entries_by_timestamp_range(tenant_id, start_ms, end_ms)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid timestamp format: {str(e)}")
+            result = await service.get_entries_by_timestamp_range(
+                tenant_id, _parse_timestamp(start), _parse_timestamp(end)
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid timestamp: {exc}")
     elif hours is not None:
-        # Time-based filtering
         result = await service.get_entries_by_time_range(tenant_id, hours)
     else:
-        # Fallback to count-based
-        result = await service.get_entries(tenant_id, count or 10)
-    
-    request_total = time.time()
-    print(f"[TIMING] API: Total request time {(request_total - request_start)*1000:.2f}ms")
-    
-    return result
+        result = await service.get_entries(tenant_id, resolved_count)
+
+    print(f"[TIMING] GET /entries total: {(_time.time()-t0)*1000:.1f}ms")
+
+    # If-Modified-Since / Last-Modified
+    lm = _last_modified_header(result)
+    if _check_not_modified(request, lm):
+        return Response(status_code=304)
+
+    response = JSONResponse(content=result)
+    if lm:
+        response.headers["Last-Modified"] = lm
+    return response
 
 
+# ---------------------------------------------------------------------------
+# GET /entries/{spec}  — by ObjectId or by type (e.g. /entries/sgv)
+# ---------------------------------------------------------------------------
 
-@router.get("/entries/current", status_code=200)
-@router.get("/entries/current.json", status_code=200)
-async def get_current_entry(
+@router.get("/entries/{spec}")
+async def get_entries_by_spec(
+    spec: str,
+    request: Request,
+    count: Optional[int] = None,
     api_secret: Optional[str] = Header(None, alias="api-secret"),
-    request: Request = None
 ):
     """
-    Returns the most recent entry in TSV format (tab-separated values).
-    Original Nightscout API endpoint for uploaders to check last entry.
-    Format: dateString \t date \t sgv \t direction \t device
+    Fetch entry by ObjectId or filter by type.
+
+    - /entries/65cf81bc436037528ec75fa5 → single entry by ID
+    - /entries/sgv                     → list of SGV entries
+    - /entries/mbg                     → list of manual BG entries
     """
-    from fastapi.responses import PlainTextResponse
-    
-    tenant_id = None
-
-    # 1. Try API key first
-    if api_secret:
-        tenant_id = get_tenant_from_api_key(request, api_secret)
-
-    # 2. If no API key, check Authorization header (JWT)
-    if not tenant_id:
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            try:
-                from jose import jwt
-                from app.core.config import settings
-                from app.repositories.user import UserRepository
-                
-                token = auth_header.replace("Bearer ", "")
-                payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-                user_id = int(payload.get("sub"))
-                
-                repo = UserRepository()
-                tenant_id = repo.get_tenant_for_user(user_id)
-                if tenant_id:
-                    tenant_id = str(tenant_id)
-            except Exception as e:
-                print(f"JWT auth failed: {e}")  # Debug logging
-                pass
-        
-    # 3. If still no tenant, try Subdomain (Public Read-Only)
-    if not tenant_id:
-        from app.api.deps import get_tenant_from_subdomain
-        tenant_id = get_tenant_from_subdomain(request)
-        
-    if not tenant_id:
-         raise HTTPException(status_code=401, detail="Authentication required")
-    
+    tenant_id = await _resolve_tenant(request, api_secret)
     service = EntriesService()
-    entries = await service.get_entries(tenant_id, count=1)
-    
-    if not entries:
-        raise HTTPException(status_code=404, detail="No entries found")
-    
-    entry = entries[0]
-    
-    # Format as TSV: dateString \t date \t sgv \t direction \t device
-    dateString = entry.get('dateString', '')
-    date = entry.get('date', '')
-    sgv = entry.get('sgv', '')
-    direction = entry.get('direction', '')
-    device = entry.get('device', '')
-    
-    # Wrap strings in quotes like original Nightscout
-    tsv_line = f'"{dateString}"\t{date}\t{sgv}\t"{direction}"\t"{device}"\n'
-    
-    return PlainTextResponse(content=tsv_line, media_type="text/plain; charset=utf-8")
 
+    if _ID_RE.match(spec):
+        # Fetch by ObjectId
+        entry = await service.get_entry_by_id(spec, tenant_id)
+        if entry is None:
+            raise HTTPException(status_code=404, detail=f"Entry not found: {spec}")
+
+        lm = _last_modified_header([entry])
+        response = JSONResponse(content=[entry])
+        if lm:
+            response.headers["Last-Modified"] = lm
+        return response
+    else:
+        # Treat spec as type filter
+        entries = await service.get_entries_by_type(spec, tenant_id, count=count or 10)
+
+        lm = _last_modified_header(entries)
+        if _check_not_modified(request, lm):
+            return Response(status_code=304)
+
+        response = JSONResponse(content=entries)
+        if lm:
+            response.headers["Last-Modified"] = lm
+        return response
+
+
+# ---------------------------------------------------------------------------
+# DELETE /entries/{spec}  — by ObjectId or by type
+# ---------------------------------------------------------------------------
+
+@router.delete("/entries/{spec}")
+async def delete_entries_by_spec(
+    spec: str,
+    request: Request,
+    api_secret: Optional[str] = Header(None, alias="api-secret"),
+):
+    """
+    Delete entry by ObjectId or all entries of a given type.
+
+    - DELETE /entries/65cf81bc436037528ec75fa5 → delete one by ID
+    - DELETE /entries/sgv                     → delete all SGV entries for tenant
+    - DELETE /entries/*                       → delete all entries for tenant (type wildcard)
+    """
+    tenant_id = await _resolve_tenant(request, api_secret)
+    service = EntriesService()
+
+    if _ID_RE.match(spec):
+        deleted = await service.delete_entry_by_id(spec, tenant_id)
+        if deleted == 0:
+            raise HTTPException(status_code=404, detail=f"Entry not found: {spec}")
+        return {"deleted": deleted}
+    else:
+        # Type filter; "*" means all
+        if spec == "*":
+            deleted = await service.delete_entries_by_find(tenant_id, find=None)
+        else:
+            deleted = await service.delete_entries_by_type(spec, tenant_id)
+        return {"deleted": deleted}
+
+
+# ---------------------------------------------------------------------------
+# DELETE /entries  — by find[] query
+# ---------------------------------------------------------------------------
+
+@router.delete("/entries")
+@router.delete("/entries/")
+async def delete_entries_by_query(
+    request: Request,
+    api_secret: Optional[str] = Header(None, alias="api-secret"),
+):
+    """
+    Delete entries matching a find[] query.
+    e.g. DELETE /entries?find[date][$lte]=1756339200000
+    """
+    tenant_id = await _resolve_tenant(request, api_secret)
+    service = EntriesService()
+
+    find = _parse_find_params(request)
+    deleted = await service.delete_entries_by_find(tenant_id, find=find)
+    return {"deleted": deleted}
