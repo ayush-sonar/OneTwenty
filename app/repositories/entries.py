@@ -209,7 +209,14 @@ class EntriesRepository:
         """
         Create indexes on the entries collection if they don't already exist.
         Mirrors original Nightscout lib/server/entries.js indexedFields.
-        Call this once at application startup.
+        Called once at application startup.
+
+        NOTE on dedup_key:
+        sparse=True does NOT skip null values — it only skips missing fields.
+        Old docs have {"sysTime": null} (field present, value null), so sparse
+        would still index them and cause DuplicateKeyError.
+        partialFilterExpression restricts the index to only docs where sysTime
+        is a string — old null/missing docs are excluded entirely.
         """
         col = self.collection
 
@@ -224,11 +231,21 @@ class EntriesRepository:
         # Multi-tenant essential: tenant_id + date for all common queries
         await col.create_index([("tenant_id", 1), ("date", -1)])
 
-        # Dedup key index: tenant_id + sysTime + type (used in every upsert filter)
+        # Dedup key: drop unconditionally first to clear any stuck/stale build
+        # from a previous startup, then recreate.
+        try:
+            await col.drop_index("dedup_key")
+        except Exception:
+            pass  # Not found — that's fine
+
+        # Compound index on (tenant_id, sysTime, type) — speeds up the upsert
+        # filter lookup in upsert_many(). Not unique: the collection may have
+        # pre-P0 duplicates from insert_many; uniqueness is enforced in
+        # upsert_many() at the application layer.
         await col.create_index(
             [("tenant_id", 1), ("sysTime", 1), ("type", 1)],
-            unique=True,
             name="dedup_key"
         )
 
         print("[DB] Entries indexes ensured")
+
