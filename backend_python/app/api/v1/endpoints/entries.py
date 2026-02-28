@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Body, Request, Header, HTTPException
 from typing import List, Union, Optional
 from app.schemas.entry import EntryCreate
-from app.api.deps import get_tenant_from_api_key, get_tenant_from_jwt
+from app.api.deps import get_tenant_from_api_key, get_tenant_from_jwt, get_mongo_db
 from app.services.entries import EntriesService
 
 router = APIRouter()
@@ -151,7 +151,96 @@ async def get_entries(
     
     return result
 
+@router.get("/entries-with-events", status_code=200)
+async def get_entries_with_events(
+    start: str,  # ISO timestamp or Unix timestamp (ms)
+    end: str,    # ISO timestamp or Unix timestamp (ms)
+    api_secret: Optional[str] = Header(None, alias="api-secret"),
+    request: Request = None,
+    db = Depends(get_mongo_db)
+):
+    """
+    Fetches both CGM entries and events for the authenticated user's tenant in the specified time range.
+    """
+    
+    tenant_id = None
 
+    # 1. Try API key first
+    if api_secret:
+        # We need the request parameter for this
+        if request is None:
+             raise HTTPException(status_code=400, detail="Request object required for auth")
+        tenant_id = get_tenant_from_api_key(request, api_secret)
+
+    # 2. Check Authorization header (JWT)
+    if not tenant_id and request:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            try:
+                from jose import jwt
+                from app.core.config import settings
+                from app.repositories.user import UserRepository
+                
+                token = auth_header.replace("Bearer ", "")
+                payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+                user_id = int(payload.get("sub"))
+                
+                repo = UserRepository()
+                tenant_id = repo.get_tenant_for_user(user_id)
+                if tenant_id:
+                    tenant_id = str(tenant_id)
+            except Exception:
+                pass
+        
+    # 3. Subdomain fallback
+    if not tenant_id and request:
+        tenant_id = get_tenant_from_subdomain(request)
+        
+    if not tenant_id:
+         raise HTTPException(status_code=401, detail="Authentication required")
+         
+    try:
+        # Parse timestamps
+        start_ms = int(start) if start.isdigit() else None
+        end_ms = int(end) if end.isdigit() else None
+        
+        if start_ms is None:
+            from datetime import datetime
+            start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
+            start_ms = int(start_dt.timestamp() * 1000)
+        if end_ms is None:
+            from datetime import datetime
+            end_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
+            end_ms = int(end_dt.timestamp() * 1000)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid timestamp format: {str(e)}")
+
+    import asyncio
+    from app.repositories.event import EventRepository
+    
+    entries_service = EntriesService()
+    # Need to manually get db dependency here properly by using FastAPI dependencies normally
+    # But for a quick fix in function body we will get it from request state or rely on Depends wrapper
+    # We will let FastApi inject `db`
+    event_repo = EventRepository(db)
+    
+    # Run both queries concurrently
+    try:
+        entries_task = asyncio.create_task(
+            entries_service.get_entries_by_timestamp_range(tenant_id, start_ms, end_ms)
+        )
+        events_task = asyncio.create_task(
+            event_repo.get_multi_by_tenant(tenant_id, limit=1000, start_date=start_ms, end_date=end_ms)
+        )
+        
+        entries, events = await asyncio.gather(entries_task, events_task)
+        
+        return {
+            "entries": entries,
+            "events": events
+        }
+    except Exception as e:
+         raise HTTPException(status_code=500, detail=f"Failed to fetch combined data: {str(e)}")
 
 @router.get("/entries/current", status_code=200)
 @router.get("/entries/current.json", status_code=200)

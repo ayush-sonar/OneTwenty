@@ -1,0 +1,84 @@
+name: Build & Deploy Backend
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  # repository URI should look like <aws_account>.dkr.ecr.<region>.amazonaws.com/onetwenty-backend
+  ECR_REPO: ${{ secrets.ECR_REPO_URI }}
+
+jobs:
+  build:
+    name: Build & push Docker image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build Docker image
+        run: |
+          cd backend_python
+          docker build -t "$ECR_REPO:${{ github.sha }}" .
+
+      - name: Tag & push image
+        run: |
+          docker tag "$ECR_REPO:${{ github.sha }}" "$ECR_REPO:latest"
+          docker push "$ECR_REPO:${{ github.sha }}"
+          docker push "$ECR_REPO:latest"
+
+  deploy:
+    name: Deploy to EC2
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: SSH & update remote container
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            # EC2 should use an attached IAM role with AmazonEC2ContainerRegistryReadOnly to pull from ECR.
+
+            IMAGE_TAG=${{ github.sha }}
+            CONTAINER_NAME=onetwenty-backend
+
+            # Pull latest image
+            docker pull "$ECR_REPO:$IMAGE_TAG"
+
+            # Stop and remove existing container
+            docker stop "$CONTAINER_NAME" || true
+            docker rm "$CONTAINER_NAME" || true
+
+            # Create env file
+            cat <<'EOF' > /home/ubuntu/app.env
+            MONGO_URI=${{ secrets.MONGO_URI }}
+            SQLALCHEMY_DATABASE_URL=${{ secrets.SQL_URL }}
+            SECRET_KEY=${{ secrets.SECRET_KEY }}
+            EOF
+
+            # Run container with env file
+            docker run -d \
+              --name "$CONTAINER_NAME" \
+              -p 8000:8000 \
+              --env-file /home/ubuntu/app.env \
+              "$ECR_REPO:$IMAGE_TAG"

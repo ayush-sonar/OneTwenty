@@ -11,6 +11,7 @@ CREATE TABLE tenants (
     public_id VARCHAR(10) UNIQUE NOT NULL,
     name VARCHAR(255) NOT NULL,
     slug VARCHAR(255) UNIQUE,
+    settings JSONB NOT NULL DEFAULT '{}',
     plan VARCHAR(50) DEFAULT 'free',
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -56,6 +57,8 @@ CREATE INDEX idx_users_public_id ON users(public_id);
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_role ON users(role);
 CREATE INDEX idx_tenants_public_id ON tenants(public_id);
+-- add a JSON index if you plan to query settings by key, e.g.:
+-- CREATE INDEX idx_tenants_settings ON tenants USING gin (settings);
 CREATE INDEX idx_api_keys_value ON api_keys(key_value);
 CREATE INDEX idx_doctor_patients_doctor ON doctor_patients(doctor_id);
 CREATE INDEX idx_doctor_patients_patient ON doctor_patients(patient_id);

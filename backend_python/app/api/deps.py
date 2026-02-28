@@ -139,3 +139,44 @@ def get_tenant_from_subdomain(request: Request = None) -> Optional[str]:
         return None
     finally:
         conn.close()
+
+from app.core.config import settings
+
+def get_current_tenant_from_api_secret_or_jwt(
+    request: Request,
+    api_secret: Optional[str] = Header(None, alias="api-secret")
+) -> str:
+    tenant_id = None
+    
+    if api_secret:
+        try:
+            tenant_id = get_tenant_from_api_key(request, api_secret)
+        except Exception:
+            pass
+            
+    if not tenant_id:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            try:
+                from jose import jwt
+                from app.repositories.user import UserRepository
+                token = auth_header.replace("Bearer ", "")
+                payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+                user_id = int(payload.get("sub"))
+                repo = UserRepository()
+                tenant_id = str(repo.get_tenant_for_user(user_id))
+            except Exception:
+                pass
+                
+    if not tenant_id:
+        tenant_id = get_tenant_from_subdomain(request)
+        
+    if not tenant_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+        
+    return tenant_id
+
+def get_mongo_db():
+    from app.db.mongo import db
+    return db.get_db()
+
