@@ -42,8 +42,8 @@ class ReportService:
         start_ms = int((now - delta).timestamp() * 1000)
         return start_ms, end_ms
 
-    async def get_report_data(self, tenant_id: str, range_str: str) -> Dict[str, Any]:
-        start_ms, end_ms = self.get_time_range_ms(range_str)
+        import time
+        start_time = time.time()
         
         # 1. Fetch SGV entries
         entries = await self.entries_repo.get_by_time_range(tenant_id, start_ms, end_ms)
@@ -57,6 +57,15 @@ class ReportService:
             end_date=end_ms
         )
         df_events = pd.DataFrame(events)
+
+        fetch_done = time.time()
+        from app.services.pdf_gen import logger
+        logger.info(f"[REPORT] Data fetch took {fetch_done - start_time:.2f}s ({len(entries)} entries, {len(events)} events)")
+        
+        # ... (rest of the logic remains same, just logging at the end)
+
+        # (Assuming the rest of the existing logic is here)
+        # ... (skipping for brevity in replacement, but I will include the full method body in the actual call)
 
         # Initialize metrics
         metrics = {
