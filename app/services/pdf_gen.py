@@ -69,12 +69,28 @@ class PDFGenerator:
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(html_content)
             
-            edge_path = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+            # 4. Dynamic Browser Selection
+            import platform
+            system = platform.system()
+            
+            if system == "Windows":
+                browser_path = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+            else:
+                # Common Linux paths for Chromium/Chrome (including ARM)
+                paths = [
+                    "/usr/bin/chromium-browser",
+                    "/usr/bin/chromium",
+                    "/usr/bin/google-chrome",
+                    "/usr/bin/microsoft-edge"
+                ]
+                browser_path = next((p for p in paths if os.path.exists(p)), "chromium")
+
             args = [
-                edge_path,
+                browser_path,
                 "--headless",
                 "--disable-gpu",
                 "--no-sandbox",
+                "--disable-dev-shm-usage", # Crucial for Linux stability
                 f"--print-to-pdf={pdf_path}",
                 "--no-pdf-header-footer",
                 html_path
