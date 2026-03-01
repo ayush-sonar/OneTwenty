@@ -298,69 +298,76 @@
         .daily-main {
             flex: 1;
             background: var(--card-bg);
-            border-radius: 3mm;
+            border-radius: 4mm;
             border: 1px solid var(--border);
-            padding: 2.5mm 3.5mm;
+            padding: 4mm 5mm;
             overflow: hidden;
-        }
-
-        .daily-sidebar {
-            width: 38mm;
-            flex-shrink: 0;
             display: flex;
             flex-direction: column;
-            gap: 1.5mm;
         }
 
         .daily-header {
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 2mm;
+            align-items: center;
+            margin-bottom: 4mm;
+        }
+
+        .daily-date-box {
+            display: flex;
+            flex-direction: column;
         }
 
         .daily-dayname {
-            font-size: 8pt;
+            font-size: 11pt;
             font-weight: 700;
             color: var(--text-primary);
         }
 
         .daily-datestr {
-            font-size: 6.2pt;
+            font-size: 8pt;
             color: var(--text-muted);
-            margin-top: 0.2mm;
         }
 
-        .daily-metrics-row {
+        .metric-grid {
             display: flex;
-            gap: 1.5mm;
-            margin-bottom: 2mm;
+            gap: 2mm;
         }
 
-        .daily-metric {
-            flex: 1;
-            background: var(--cream);
-            border-radius: 1.8mm;
-            padding: 1.25mm 1.5mm;
+        .metric-box {
+            background: #F8F7F4;
+            border-radius: 2.5mm;
+            padding: 1.5mm 3mm;
             text-align: center;
+            min-width: 14mm;
         }
 
-        .daily-metric .dm-label {
-            font-size: 5.2pt;
+        .metric-box .label {
+            font-size: 5.5pt;
             text-transform: uppercase;
+            letter-spacing: 0.05em;
             color: var(--text-muted);
+            margin-bottom: 0.5mm;
         }
 
-        .daily-metric .dm-value {
-            font-size: 8.5pt;
+        .metric-box .value {
+            font-size: 10pt;
             font-weight: 700;
             color: var(--text-primary);
+            line-height: 1.1;
+        }
+
+        .metric-box .unit {
+            font-size: 5pt;
+            color: var(--text-muted);
         }
 
         .daily-graph-wrap {
             position: relative;
             width: 100%;
-            height: 26mm;
+            height: 42mm;
+            /* Increased from 26mm */
+            margin-bottom: 2mm;
         }
 
         .daily-graph-wrap svg {
@@ -371,10 +378,10 @@
 
         .tir-mini-bar {
             display: flex;
-            height: 5px;
-            border-radius: 3px;
+            height: 4px;
+            border-radius: 2px;
             overflow: hidden;
-            margin-top: 2mm;
+            margin-top: 1mm;
         }
 
         .tir-mini-seg {
@@ -656,90 +663,125 @@
         {% for day in chunk %}
         <div class="daily-card">
             <div class="daily-main">
+                <!-- Header with Compact Metrics -->
                 <div class="daily-header">
                     <div class="daily-date-box">
                         <span class="daily-dayname">{{ day.day_name }}</span>
                         <span class="daily-datestr">{{ day.date_display }}</span>
                     </div>
-                    <div style="display:flex;gap:2mm">
-                        <div class="daily-metric">
-                            <div class="dm-label">TIR</div>
-                            <div class="dm-value" style="color:#5AAF72">{{ day.tir_range }}%</div>
+                    <div class="metric-grid">
+                        <div class="metric-box">
+                            <div class="label" style="color:#5AAF72">TIR</div>
+                            <div class="value">{{ day.tir.inRange }}%</div>
                         </div>
-                        <div class="daily-metric">
-                            <div class="dm-label">Avg</div>
-                            <div class="dm-value">{{ day.avg }}</div>
-                            <div class="dm-unit">mg/dL</div>
+                        <div class="metric-box">
+                            <div class="label">AVG</div>
+                            <div class="value">{{ day.avg }}</div>
+                            <div class="unit">mg/dL</div>
                         </div>
-                        <div class="daily-metric">
-                            <div class="dm-label">Min</div>
-                            <div class="dm-value">{{ day.min }}</div>
+                        <div class="metric-box">
+                            <div class="label">CV</div>
+                            <div class="value">{{ day.cv }}%</div>
                         </div>
-                        <div class="daily-metric">
-                            <div class="dm-label">Max</div>
-                            <div class="dm-value">{{ day.max }}</div>
+                        <div class="metric-box">
+                            <div class="label">MIN</div>
+                            <div class="value">{{ day.min }}</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="label">MAX</div>
+                            <div class="value">{{ day.max }}</div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Expanded Glucose Chart -->
                 <div class="daily-graph-wrap">
-                    <svg viewBox="0 0 590 218" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                    <svg viewBox="0 0 590 220" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
                         <g transform="translate(30, 0)">
-                            {% set CW = 560 %}{% set CH = 200 %}{% set G_MIN = 40 %}{% set G_MAX = 320 %}
+                            {% set CW = 560 %}{% set CH = 180 %}{% set G_MIN = 40 %}{% set G_MAX = 320 %}
                             {% set refHigh = CH - ((180 - G_MIN) / (G_MAX - G_MIN)) * CH %}
                             {% set refLow = CH - ((70 - G_MIN) / (G_MAX - G_MIN)) * CH %}
 
                             <!-- Grid -->
                             {% for v in [80, 120, 160, 200, 240, 280] %}
                             {% set y = CH - ((v - G_MIN) / (G_MAX - G_MIN)) * CH %}
-                            <line x1="0" y1="{{y}}" x2="{{CW}}" y2="{{y}}" stroke="#F0EDE8" stroke-width="0.5" />
-                            <text x="-4" y="{{y + 2.5}}" font-size="7" fill="#B0ACA5" text-anchor="end">{{v}}</text>
+                            <line x1="0" y1="{{y}}" x2="{{CW}}" y2="{{y}}" stroke="#F0EDE8" stroke-width="0.8" />
+                            <text x="-6" y="{{y + 3}}" font-size="9" fill="#B0ACA5" text-anchor="end">{{v}}</text>
                             {% endfor %}
 
                             <!-- X Ticks -->
                             {% for h in range(0, 25, 3) %}
                             {% set x = (h / 24) * CW %}
-                            <line x1="{{x}}" y1="0" x2="{{x}}" y2="{{CH}}" stroke="#F0EDE8" stroke-width="0.5" />
-                            <text x="{{x}}" y="{{CH + 9}}" font-size="7" fill="#B0ACA5" text-anchor="middle">{{
-                                "%02d:00" |
-                                format(h) }}</text>
+                            <line x1="{{x}}" y1="0" x2="{{x}}" y2="{{CH}}" stroke="#F0EDE8" stroke-width="0.6" />
+                            <text x="{{x}}" y="{{CH + 12}}" font-size="8.5" fill="#B0ACA5" text-anchor="middle">{{
+                                "%02d:00" | format(h) }}</text>
                             {% endfor %}
 
                             <!-- Target Range -->
                             <rect x="0" y="{{refHigh}}" width="{{CW}}" height="{{refLow - refHigh}}" fill="#5AAF72"
                                 fill-opacity="0.06" />
 
-                            <!-- Path -->
+                            <!-- Glucose Path -->
                             {% if day.readings %}
                             <path
                                 d="M {{ (day.readings[0].t / 1439) * CW }} {{ CH - ((day.readings[0].v - G_MIN) / (G_MAX - G_MIN)) * CH }}
                                 {%- for r in day.readings[1:] %} L {{ (r.t / 1439) * CW }} {{ CH - ((r.v - G_MIN) / (G_MAX - G_MIN)) * CH }}{% endfor %}"
-                                fill="none" stroke="#3B6EA8" stroke-width="1.8" stroke-linecap="round"
+                                fill="none" stroke="#3B6EA8" stroke-width="2.2" stroke-linecap="round"
                                 stroke-linejoin="round" />
                             {% endif %}
+
+                            <!-- Treatment/Event Markers -->
+                            {% for ev in day.raw_events %}
+                            {% set ex = (ev.t / 1439) * CW %}
+                            {% if ev.cat == "insulin" %}
+                            <line x1="{{ex}}" y1="{{CH + 4}}" x2="{{ex}}" y2="{{CH + 18}}" stroke="#3B6EA8"
+                                stroke-width="3.5" stroke-linecap="round" />
+                            {% elif ev.cat == "carbs" %}
+                            <line x1="{{ex}}" y1="{{CH + 4}}" x2="{{ex}}" y2="{{CH + 18}}" stroke="#F4913B"
+                                stroke-width="3.5" stroke-linecap="round" />
+                            {% elif ev.cat == "exercise" %}
+                            <line x1="{{ex}}" y1="{{CH + 4}}" x2="{{ex}}" y2="{{CH + 18}}" stroke="#8B5CF6"
+                                stroke-width="3.5" stroke-linecap="round" />
+                            {% endif %}
+                            {% endfor %}
                         </g>
                     </svg>
                 </div>
                 {{ tir_bar_macro(day.tir, True) }}
             </div>
+
+            <!-- Sidebar -->
             <div class="daily-sidebar">
                 <div class="notes-card">
                     <div class="notes-card-title">Notes</div>
+                    {% if day.notes %}
                     {% for note in day.notes %}
-                    <div class="note-item"><span class="note-time">{{ note.time }}</span><span class="note-text">{{
-                            note.text }}</span><span class="note-tag">{{ note.tag }}</span></div>
+                    <div class="note-item">
+                        <span class="note-time">{{ note.time }}</span>
+                        <span class="note-text">{{ note.text }}</span>
+                        <span class="note-tag">{{ note.tag }}</span>
+                    </div>
                     {% endfor %}
+                    {% else %}
+                    <div style="font-size:6pt; color:var(--text-muted)">No notes recorded.</div>
+                    {% endif %}
                 </div>
-                <div class="treatments-card">
+                <div class="treatments-card" style="margin-top: 1.5mm">
                     <div class="notes-card-title">Treatments</div>
+                    {% if day.treatments %}
                     {% for t in day.treatments %}
                     <div class="treatment-item">
-                        <div class="treatment-dot" style="background:#3B6EA8"></div>
+                        <div class="treatment-dot"
+                            style="background:{% if t.cat == 'insulin' %}#3B6EA8{% else %}#F4913B{% endif %}"></div>
                         <div class="treatment-info">
                             <div class="treatment-time">{{ t.time }}</div>
                             <div class="treatment-desc">{{ t.desc }}</div>
                         </div>
                     </div>
                     {% endfor %}
+                    {% else %}
+                    <div style="font-size:6pt; color:var(--text-muted)">No treatments.</div>
+                    {% endif %}
                 </div>
             </div>
         </div>

@@ -82,40 +82,30 @@ class EntriesRepository:
 
     async def upsert_many(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Upserts documents into the 'entries' collection, one at a time.
-
+        Upserts documents into the 'entries' collection in bulk.
+        
         Deduplication key: { sysTime, type, tenant_id }
-        Mirrors original OneTwenty lib/server/entries.js create() upsert logic.
-        Returns the full list of documents as stored (with _id as string).
+        Uses pymongo.UpdateOne for high performance batching.
+        Returns the full list of documents as provided (ID assignment is skipped for bulk).
         """
         if not documents:
             return []
 
-        result_docs = []
-
+        from pymongo import UpdateOne
+        
+        requests = []
         for doc in documents:
             dedup_filter = {
-                "sysTime": doc["sysTime"],
+                "sysTime": doc.get("sysTime"),
                 "type": doc.get("type", "sgv"),
-                "tenant_id": doc["tenant_id"],
+                "tenant_id": doc.get("tenant_id"),
             }
+            requests.append(UpdateOne(dedup_filter, {"$set": doc}, upsert=True))
 
-            update_result = await self.collection.update_one(
-                dedup_filter,
-                {"$set": doc},
-                upsert=True
-            )
+        if requests:
+            await self.collection.bulk_write(requests, ordered=False)
 
-            if update_result.upserted_id:
-                doc["_id"] = str(update_result.upserted_id)
-            else:
-                existing = await self.collection.find_one(dedup_filter, {"_id": 1})
-                if existing:
-                    doc["_id"] = str(existing["_id"])
-
-            result_docs.append(doc)
-
-        return result_docs
+        return documents
 
     # ------------------------------------------------------------------
     # Read

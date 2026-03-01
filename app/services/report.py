@@ -151,30 +151,59 @@ class ReportService:
                 
                 day_treatments = []
                 day_notes = []
+                day_raw_events = [] # For SVG markers
                 
                 if not day_events.empty:
                     for _, ev in day_events.iterrows():
                         time_str = ev["date_dt"].strftime("%H:%M")
-                        if ev.get("eventType") in ["Meal Bolus", "Correction Bolus", "Basal"]:
-                            insulin = ev.get("insulin", "")
-                            notes = ev.get("notes", "")
+                        # Minute of day for SVG positioning (0-1439)
+                        mod = (ev["date_dt"].hour * 60) + ev["date_dt"].minute
+                        
+                        e_type = ev.get("eventType")
+                        insulin = ev.get("insulin")
+                        notes = ev.get("notes") or ""
+                        
+                        # Categorize for SVG
+                        cat = "other"
+                        if e_type in ["Meal Bolus", "Correction Bolus", "Bolus"]:
+                            cat = "insulin"
+                        elif "carbs" in notes.lower() or e_type == "Meal":
+                            cat = "carbs"
+                        elif "exercise" in notes.lower() or "walk" in notes.lower():
+                            cat = "exercise"
+                            
+                        day_raw_events.append({
+                            "t": mod,
+                            "cat": cat,
+                            "val": insulin if cat == "insulin" else 1 # default size
+                        })
+
+                        if cat == "insulin":
                             desc = f"{insulin}u {notes}".strip()
-                            day_treatments.append({"time": time_str, "desc": desc or ev.get("eventType")})
+                            day_treatments.append({"time": time_str, "desc": desc or e_type, "cat": "insulin"})
+                        elif cat == "carbs":
+                            day_treatments.append({"time": time_str, "desc": notes or "Meal", "cat": "carbs"})
                         else:
                             day_notes.append({
                                 "time": time_str,
-                                "text": ev.get("notes") or ev.get("eventType"),
-                                "tag": ev.get("eventType", "event").lower()
+                                "text": notes or e_type,
+                                "tag": e_type.lower()
                             })
 
                 day_dt = pd.to_datetime(day)
                 day_sgvs = day_entries["sgv"]
                 
+                # Daily CV calculation
+                day_avg = day_sgvs.mean()
+                day_std = day_sgvs.std() if len(day_sgvs) > 1 else 0
+                day_cv = round((day_std / day_avg) * 100, 1) if day_avg > 0 else 0
+                
                 daily_info = {
                     "date": day,
                     "day_name": day_dt.strftime("%a"),
                     "date_display": day_dt.strftime("%d %b %Y"),
-                    "avg": round(day_sgvs.mean(), 0),
+                    "avg": round(day_avg, 0),
+                    "cv": day_cv,
                     "tir": {
                         "vlow": round((day_sgvs < 54).sum() / len(day_sgvs) * 100, 0),
                         "low": round((day_sgvs.between(54, 69).sum() / len(day_sgvs)) * 100, 0),
@@ -186,7 +215,8 @@ class ReportService:
                     "max": int(day_sgvs.max()),
                     "readings": day_entries.sort_values("date")[["sgv", "minute_of_day"]].rename(columns={"sgv": "v", "minute_of_day": "t"}).to_dict("records"),
                     "treatments": day_treatments,
-                    "notes": day_notes
+                    "notes": day_notes,
+                    "raw_events": day_raw_events
                 }
                 daily_groups.append(daily_info)
 
