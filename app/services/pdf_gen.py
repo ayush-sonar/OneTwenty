@@ -95,7 +95,8 @@ class PDFGenerator:
         if system == "Windows":
             tmp_parent = None # Use default system temp
         else:
-            tmp_parent = os.path.join(os.getcwd(), ".pdf_tmp")
+            # Try a path that Snap usually has permission for (like ~/Downloads or project folder)
+            tmp_parent = os.path.join(os.path.expanduser("~"), ".pdf_tmp")
             os.makedirs(tmp_parent, exist_ok=True)
 
         with tempfile.TemporaryDirectory(dir=tmp_parent) as tmp_dir:
@@ -107,17 +108,23 @@ class PDFGenerator:
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(html_content)
             
-            # NOTE: Removed --single-process as it can cause V8 conflicts.
-            # Added --user-data-dir to a writable path to avoid Snap permission issues.
+            # Use aggressive stability flags for Linux ARM / CI environments
+            # Added XDG_CONFIG_HOME to environment to avoid /run/user/0 permission issues.
+            import copy
+            env = copy.deepcopy(os.environ)
+            env["XDG_RUNTIME_DIR"] = tmp_dir
+            env["HOME"] = os.path.expanduser("~")
+
             args = [
                 browser_path,
-                "--headless=new", 
+                "--headless", 
                 "--disable-gpu",
                 "--no-sandbox",
                 "--no-zygote",
                 "--disable-dev-shm-usage",
                 "--disable-software-rasterizer",
                 "--disable-extensions",
+                "--disable-component-extensions",
                 "--disable-setuid-sandbox",
                 "--disable-gpu-sandbox",
                 f"--user-data-dir={user_data_dir}",
@@ -130,14 +137,14 @@ class PDFGenerator:
             browser_start = time.time()
             try:
                 # Add a timeout to prevent the API from hanging forever.
-                res = subprocess.run(args, check=True, capture_output=True, text=True, timeout=20)
+                res = subprocess.run(args, check=True, capture_output=True, text=True, timeout=25, env=env)
                 logger.info(f"[PDF] Browser execution took {time.time() - browser_start:.2f}s")
                 
                 # Tiny sleep for ARM filesystem flush in Snap containers
                 if system != "Windows": time.sleep(0.5)
 
                 if not os.path.exists(pdf_path):
-                    err_msg = f"Browser reported success but {pdf_path} MISSING on host.\nStderr: {res.stderr}"
+                    err_msg = f"Browser reported success but result file is MISSING.\nStderr: {res.stderr}"
                     logger.error(f"[PDF] {err_msg}")
                     raise Exception(err_msg)
                 
@@ -145,7 +152,7 @@ class PDFGenerator:
                 with open(pdf_path, "rb") as f:
                     return f.read()
             except subprocess.TimeoutExpired:
-                logger.error("[PDF] Browser timed out after 20s.")
+                logger.error("[PDF] Browser timed out after 25s.")
                 raise Exception("PDF generation timed out (browser hung). Check Chromium installation.")
             except subprocess.CalledProcessError as e:
                 err_msg = f"Browser failed (code {e.returncode}):\n{e.stderr}\n{e.stdout}"
