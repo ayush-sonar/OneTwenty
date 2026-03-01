@@ -11,3 +11,6 @@ OneTwenty-key.pem
 *.pem
 
 cgm-remote-monitor/
+
+# Temp reports
+.pdf_tmp/

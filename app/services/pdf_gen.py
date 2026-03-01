@@ -90,7 +90,15 @@ class PDFGenerator:
             browser_path = next((p for p in paths if os.path.exists(p)), "chromium")
 
         # 5. Execute Browser Headless
-        with tempfile.TemporaryDirectory() as tmp_dir:
+        # CRITICAL for Linux Snap: Snaps write to a private /tmp. 
+        # We must use a directory that the Snap *can* see (like ~/ or the project folder).
+        if system == "Windows":
+            tmp_parent = None # Use default system temp
+        else:
+            tmp_parent = os.path.join(os.getcwd(), ".pdf_tmp")
+            os.makedirs(tmp_parent, exist_ok=True)
+
+        with tempfile.TemporaryDirectory(dir=tmp_parent) as tmp_dir:
             html_path = os.path.join(tmp_dir, "report.html")
             pdf_path = os.path.join(tmp_dir, "report.pdf")
             user_data_dir = os.path.join(tmp_dir, "user-data")
@@ -99,9 +107,8 @@ class PDFGenerator:
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(html_content)
             
-            # Use aggressive stability flags for Linux ARM / CI environments
             # NOTE: Removed --single-process as it can cause V8 conflicts.
-            # Added --user-data-dir to a writable temp path to avoid UID 0 / Snap permission issues.
+            # Added --user-data-dir to a writable path to avoid Snap permission issues.
             args = [
                 browser_path,
                 "--headless=new", 
@@ -122,22 +129,24 @@ class PDFGenerator:
             logger.info(f"[PDF] Executing browser: {browser_path}")
             browser_start = time.time()
             try:
-                # Add a 30-second timeout to prevent the API from hanging forever.
-                res = subprocess.run(args, check=True, capture_output=True, text=True, timeout=15)
+                # Add a timeout to prevent the API from hanging forever.
+                res = subprocess.run(args, check=True, capture_output=True, text=True, timeout=20)
                 logger.info(f"[PDF] Browser execution took {time.time() - browser_start:.2f}s")
                 
+                # Tiny sleep for ARM filesystem flush in Snap containers
+                if system != "Windows": time.sleep(0.5)
+
                 if not os.path.exists(pdf_path):
-                    err_msg = f"Browser finished (0) but {pdf_path} MISSING.\nStderr: {res.stderr}"
+                    err_msg = f"Browser reported success but {pdf_path} MISSING on host.\nStderr: {res.stderr}"
                     logger.error(f"[PDF] {err_msg}")
                     raise Exception(err_msg)
                 
-                logger.info(f"[PDF] Successfully created PDF in {time.time() - start_time:.2f}s")
+                logger.info(f"[PDF] Successfully created PDF ({os.path.getsize(pdf_path)} bytes) in {time.time() - start_time:.2f}s")
                 with open(pdf_path, "rb") as f:
                     return f.read()
             except subprocess.TimeoutExpired:
-                logger.error("[PDF] Browser timed out after 15s.")
-                # Fallback: sometimes --headless=new hangs but old --headless works, or vice versa.
-                raise Exception("PDF generation timed out (browser hung). Check Chromium installation and dependencies.")
+                logger.error("[PDF] Browser timed out after 20s.")
+                raise Exception("PDF generation timed out (browser hung). Check Chromium installation.")
             except subprocess.CalledProcessError as e:
                 err_msg = f"Browser failed (code {e.returncode}):\n{e.stderr}\n{e.stdout}"
                 logger.error(f"[PDF] {err_msg}")
