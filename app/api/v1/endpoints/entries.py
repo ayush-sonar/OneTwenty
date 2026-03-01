@@ -22,7 +22,9 @@ from typing import Any, Dict, List, Optional, Union
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
-from app.api.deps import get_tenant_from_api_key
+import asyncio
+from app.api.deps import get_tenant_from_api_key, get_mongo_db
+from app.repositories.event import EventRepository
 from app.schemas.entry import EntryCreate
 from app.services.entries import EntriesService
 
@@ -234,6 +236,54 @@ async def get_current_entry(
     if lm:
         response.headers["Last-Modified"] = lm
     return response
+
+
+# ---------------------------------------------------------------------------
+# GET /entries-with-events
+# ---------------------------------------------------------------------------
+
+@router.get("/entries-with-events")
+@router.get("/entries/entries-with-events")
+async def get_entries_with_events(
+    request: Request,
+    start: str,
+    end: str,
+    api_secret: Optional[str] = Header(None, alias="api-secret"),
+    db = Depends(get_mongo_db)
+):
+    """
+    Combined fetch for both entries and treatments (events) in a time range.
+    Mirrors some custom client requirements (e.g. report generators).
+    Path: /api/v1/entries-with-events OR /api/v1/entries/entries-with-events
+    """
+    t0 = _time.time()
+    tenant_id = await _resolve_tenant(request, api_secret)
+    
+    try:
+        start_ms = _parse_timestamp(start)
+        end_ms = _parse_timestamp(end)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid timestamp: {exc}")
+
+    entries_service = EntriesService()
+    event_repo = EventRepository(db)
+
+    # Fetch concurrently
+    entries_task = asyncio.create_task(
+        entries_service.get_entries_by_timestamp_range(tenant_id, start_ms, end_ms)
+    )
+    events_task = asyncio.create_task(
+        event_repo.get_multi_by_tenant(tenant_id, limit=1000, start_date=start_ms, end_date=end_ms)
+    )
+
+    entries, events = await asyncio.gather(entries_task, events_task)
+    
+    print(f"[TIMING] GET /entries-with-events total: {(_time.time()-t0)*1000:.1f}ms")
+
+    return {
+        "entries": entries,
+        "events": events
+    }
 
 
 # ---------------------------------------------------------------------------
