@@ -76,30 +76,43 @@ class PDFGenerator:
             if system == "Windows":
                 browser_path = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
             else:
-                # Common Linux paths for Chromium/Chrome (including ARM)
+                # Common Linux paths for Chromium/Chrome/Edge (including ARM)
                 paths = [
                     "/usr/bin/chromium-browser",
                     "/usr/bin/chromium",
                     "/usr/bin/google-chrome",
-                    "/usr/bin/microsoft-edge"
+                    "/usr/bin/microsoft-edge",
+                    "/snap/bin/chromium", # For Ubuntu Snap
+                    "/usr/bin/brave-browser"
                 ]
                 browser_path = next((p for p in paths if os.path.exists(p)), "chromium")
 
+            # 5. Execute Browser Headless
             args = [
                 browser_path,
-                "--headless",
+                "--headless=new", # Modern headless mode
                 "--disable-gpu",
                 "--no-sandbox",
-                "--disable-dev-shm-usage", # Crucial for Linux stability
+                "--disable-dev-shm-usage", # Stability in limited containers (ARM/Docker)
                 f"--print-to-pdf={pdf_path}",
                 "--no-pdf-header-footer",
+                "--remote-debugging-port=9222", # Sometimes required for newer Chromium stability
                 html_path
             ]
             
-            subprocess.run(args, check=True, capture_output=True)
-            
-            with open(pdf_path, "rb") as f:
-                return f.read()
+            # Run and capture output for debugging
+            try:
+                res = subprocess.run(args, check=True, capture_output=True, text=True)
+                
+                if not os.path.exists(pdf_path):
+                    # Sometimes return code is 0 but it didn't write the file
+                    err_msg = f"Browser returned 0 but {pdf_path} was NOT created.\nStderr: {res.stderr}\nStdout: {res.stdout}"
+                    raise Exception(err_msg)
+                
+                with open(pdf_path, "rb") as f:
+                    return f.read()
+            except subprocess.CalledProcessError as e:
+                raise Exception(f"Browser failed (code {e.returncode}):\n{e.stderr}\n{e.stdout}")
 
     def upload_and_presign(self, pdf_content: bytes, tenant_id: str) -> str:
         """Uploads to S3 and returns a pre-signed URL valid for 1 hour."""
