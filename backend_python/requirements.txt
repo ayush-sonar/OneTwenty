@@ -6,6 +6,14 @@ python-dotenv
 pydantic
 pydantic-settings
 sqlalchemy
+fastapi
+uvicorn
+pymongo
+motor
+python-dotenv
+pydantic
+pydantic-settings
+sqlalchemy
 alembic
 psycopg2-binary
 python-jose[cryptography]

@@ -1,0 +1,1478 @@
+{
+    "info": {
+        "_postman_id": "1087dc7e-ffb4-4aab-a4f5-4fb749a8580c",
+        "name": "OneTwenty \u2014 Python Backend API",
+        "description": "All HTTP API endpoints for the OneTwenty multi-tenant Nightscout backend.\n\nBase URL: https://{{slug}}.onetwenty.dev/api/v1\n\nVariables:\n  base_url   = https://onetwenty.dev\n  slug       = ayush  (your tenant slug)\n  access_token  = <JWT access token from /auth/login>\n  api_secret_hash = <SHA-1 hash of your API secret>",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        "_exporter_id": "30812963"
+    },
+    "item": [
+        {
+            "name": "Auth",
+            "item": [
+                {
+                    "name": "Signup",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"securepass123\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{local}}/api/v1/auth/signup",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "auth",
+                                "signup"
+                            ]
+                        },
+                        "description": "Register a new user account. Returns user_id on success."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Login",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var json = pm.response.json();",
+                                    "if (json.access_token)  pm.collectionVariables.set('access_token',  json.access_token);",
+                                    "if (json.refresh_token) pm.collectionVariables.set('refresh_token', json.refresh_token);"
+                                ],
+                                "type": "text/javascript",
+                                "packages": {}
+                            }
+                        },
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "exec": [],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"user_id\": \"ayusht2d@gmail.com\",\n  \"password\": \"Hehe@123\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{local}}/api/v1/auth/login",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "auth",
+                                "login"
+                            ]
+                        },
+                        "description": "Authenticate and receive JWT access + refresh tokens.\n\nThe test script auto-saves access_token and refresh_token to collection variables."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Refresh Token",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var json = pm.response.json();",
+                                    "if (json.access_token) pm.collectionVariables.set('access_token', json.access_token);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                            "raw": "{{local}}/api/v1/auth/refresh-token?refresh_token={{refresh_token}}",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "auth",
+                                "refresh-token"
+                            ],
+                            "query": [
+                                {
+                                    "key": "refresh_token",
+                                    "value": "{{refresh_token}}"
+                                }
+                            ]
+                        },
+                        "description": "Exchange a refresh token for a new access token."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get / Create API Secret",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var json = pm.response.json();",
+                                    "if (json.api_secret) pm.collectionVariables.set('api_secret_hash', json.api_secret);"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{local}}/api/v1/auth/api-secret",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "auth",
+                                "api-secret"
+                            ]
+                        },
+                        "description": "Get the existing API secret for the user's tenant, or create one if none exists. Requires JWT."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Reset API Secret",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{local}}/api/v1/auth/reset-api-secret",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "auth",
+                                "reset-api-secret"
+                            ]
+                        },
+                        "description": "Revoke the current API secret and generate a new one. \u26a0\ufe0f All uploaders using the old secret will break."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Profile",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var json = pm.response.json();",
+                                    "if (json.slug) pm.collectionVariables.set('slug', json.slug);",
+                                    "if (json.subdomain_url) pm.collectionVariables.set('subdomain_url', json.subdomain_url)",
+                                    "if (json.subdomain_url) {",
+                                    "    const clean = json.subdomain_url.replace(/^https?:\\/\\//, '');",
+                                    "    pm.collectionVariables.set('subdomain_url_without_https', clean);",
+                                    "}"
+                                ],
+                                "type": "text/javascript",
+                                "packages": {}
+                            }
+                        },
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "exec": [
+                                    ""
+                                ],
+                                "type": "text/javascript",
+                                "packages": {}
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{local}}/api/v1/auth/profile",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "auth",
+                                "profile"
+                            ]
+                        },
+                        "description": "Get current user's profile including tenant info and subdomain URL."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Status & Settings",
+            "item": [
+                {
+                    "name": "Status \u2014 Subdomain (public)",
+                    "protocolProfileBehavior": {
+                        "disabledSystemHeaders": {
+                            "accept": true,
+                            "host": true
+                        }
+                    },
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "text/plain",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Host",
+                                "value": "{{subdomain_url_without_https}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{local}}/api/v1/status",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "status"
+                            ]
+                        },
+                        "description": "Fetch server status and tenant configuration. No auth needed \u2014 tenant resolved from subdomain."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Status \u2014 API Secret",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "api-secret",
+                                "value": "{{api_secret_hash}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{subdomain_url}}/api/v1/status",
+                            "host": [
+                                "{{subdomain_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "status"
+                            ]
+                        },
+                        "description": "Fetch status authenticated via API secret header."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Status \u2014 JWT",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{subdomain_url}}/api/v1/status",
+                            "host": [
+                                "{{subdomain_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "status"
+                            ]
+                        },
+                        "description": "Fetch status authenticated via JWT Bearer token."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Status (.json extension)",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/status.json",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "status.json"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Update Settings",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"units\": \"mmol\",\n  \"alarm_high\": 200,\n  \"alarm_low\": 65,\n  \"title\": \"My CGM\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{local}}/api/v1/settings",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "settings"
+                            ]
+                        },
+                        "description": "Update tenant settings. Accepts partial updates \u2014 only provided fields are merged."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Entries (CGM Data)",
+            "item": [
+                {
+                    "name": "GET Entries \u2014 Latest 10 (subdomain)",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries"
+                            ]
+                        },
+                        "description": "Fetch the latest 10 entries. Tenant resolved from subdomain \u2014 no auth header needed."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "GET Entries \u2014 count=50",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries?count=50",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries"
+                            ],
+                            "query": [
+                                {
+                                    "key": "count",
+                                    "value": "50"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "GET Entries \u2014 Last 2 hours",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries?hours=2",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries"
+                            ],
+                            "query": [
+                                {
+                                    "key": "hours",
+                                    "value": "2"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "GET Entries \u2014 Last 24 hours",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries?hours=24",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries"
+                            ],
+                            "query": [
+                                {
+                                    "key": "hours",
+                                    "value": "24"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "GET Entries \u2014 ISO timestamp range",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries?start=2025-08-27T00:00:00Z&end=2025-08-27T23:59:59Z",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries"
+                            ],
+                            "query": [
+                                {
+                                    "key": "start",
+                                    "value": "2025-08-27T00:00:00Z"
+                                },
+                                {
+                                    "key": "end",
+                                    "value": "2025-08-27T23:59:59Z"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "GET Entries \u2014 Unix ms range",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries?start=1756339200000&end=1756425600000",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries"
+                            ],
+                            "query": [
+                                {
+                                    "key": "start",
+                                    "value": "1756339200000"
+                                },
+                                {
+                                    "key": "end",
+                                    "value": "1756425600000"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "GET Entries \u2014 API Secret",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "api-secret",
+                                "value": "{{api_secret_hash}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "GET Entries \u2014 JWT",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "GET Entries \u2014 find[sgv][$gte]=120",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries?find[sgv][$gte]=120",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries"
+                            ],
+                            "query": [
+                                {
+                                    "key": "find[sgv][$gte]",
+                                    "value": "120"
+                                }
+                            ]
+                        },
+                        "description": "Nightscout find[] query syntax. Filters entries where sgv \u2265 120."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "GET Entries \u2014 find[type]=mbg",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries?find[type]=mbg",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries"
+                            ],
+                            "query": [
+                                {
+                                    "key": "find[type]",
+                                    "value": "mbg"
+                                }
+                            ]
+                        },
+                        "description": "Filter entries by type (mbg = manual blood glucose)."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "GET Entries/current \u2014 plain (subdomain)",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries/current",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries",
+                                "current"
+                            ]
+                        },
+                        "description": "Latest SGV entry. Returns JSON array by default."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "GET Entries/current \u2014 TSV (Accept: text/plain)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "text/plain"
+                            }
+                        ],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries/current",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries",
+                                "current"
+                            ]
+                        },
+                        "description": "Latest SGV entry in TSV format: dateString\\tdate\\tsgv\\tdirection\\tdevice"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "GET Entries/current \u2014 (.json extension)",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries/current.json",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries",
+                                "current.json"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "GET Entries/current \u2014 API Secret",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "api-secret",
+                                "value": "{{api_secret_hash}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries/current",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries",
+                                "current"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "GET Entries/{spec} \u2014 by ObjectId",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries/65cf81bc436037528ec75fa5",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries",
+                                "65cf81bc436037528ec75fa5"
+                            ]
+                        },
+                        "description": "Fetch a single entry by its MongoDB ObjectId. Replace the ID in the URL."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "GET Entries/{spec} \u2014 by type",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries/sgv",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries",
+                                "sgv"
+                            ]
+                        },
+                        "description": "Filter entries by type. Try: sgv, mbg, cal."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "POST Entries \u2014 single SGV",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "api-secret",
+                                "value": "{{api_secret_hash}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"type\": \"sgv\",\n  \"dateString\": \"2025-08-27T12:00:00.000Z\",\n  \"date\": 1756339200000,\n  \"sgv\": 120,\n  \"direction\": \"Flat\",\n  \"device\": \"xDrip-LibreLink\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries"
+                            ]
+                        },
+                        "description": "Upload a single CGM entry. Upserts by (sysTime, type) \u2014 safe to retry."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "POST Entries \u2014 batch",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "api-secret",
+                                "value": "{{api_secret_hash}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "[\n  {\n    \"type\": \"sgv\",\n    \"dateString\": \"2025-08-27T12:00:00.000Z\",\n    \"date\": 1756339200000,\n    \"sgv\": 120,\n    \"direction\": \"Flat\"\n  },\n  {\n    \"type\": \"sgv\",\n    \"dateString\": \"2025-08-27T12:05:00.000Z\",\n    \"date\": 1756339500000,\n    \"sgv\": 125,\n    \"direction\": \"FortyFiveUp\"\n  }\n]",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries"
+                            ]
+                        },
+                        "description": "Upload multiple CGM entries in one request."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "POST Entries (.json extension)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "api-secret",
+                                "value": "{{api_secret_hash}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "[{\"type\":\"sgv\",\"dateString\":\"2025-08-27T12:00:00.000Z\",\"date\":1756339200000,\"sgv\":120,\"direction\":\"Flat\"}]",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries.json",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries.json"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "DELETE Entries/{spec} \u2014 by ObjectId",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "api-secret",
+                                "value": "{{api_secret_hash}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries/65cf81bc436037528ec75fa5",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries",
+                                "65cf81bc436037528ec75fa5"
+                            ]
+                        },
+                        "description": "Delete a single entry by its ObjectId."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "DELETE Entries/{spec} \u2014 by type",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "api-secret",
+                                "value": "{{api_secret_hash}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries/sgv",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries",
+                                "sgv"
+                            ]
+                        },
+                        "description": "Delete all entries of a specific type (sgv, mbg, cal, etc.)."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "DELETE Entries \u2014 by find[] query",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "api-secret",
+                                "value": "{{api_secret_hash}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "https://{{slug}}.onetwenty.dev/api/v1/entries?find[date][$lte]=1756339200000",
+                            "protocol": "https",
+                            "host": [
+                                "{{slug}}",
+                                "onetwenty",
+                                "dev"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries"
+                            ],
+                            "query": [
+                                {
+                                    "key": "find[date][$lte]",
+                                    "value": "1756339200000"
+                                }
+                            ]
+                        },
+                        "description": "Delete all entries matching a find[] filter. Example: delete entries older than a timestamp."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "GET Entries with Events \u2014 Time Range",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{local}}/api/v1/entries-with-events?start={{}}&end={{}}",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "entries-with-events"
+                            ],
+                            "query": [
+                                {
+                                    "key": "start",
+                                    "value": "{{}}"
+                                },
+                                {
+                                    "key": "end",
+                                    "value": "{{}}"
+                                }
+                            ]
+                        },
+                        "description": "Fetch both CGM entries and events for the specified time range."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Doctors (RBAC)",
+            "item": [
+                {
+                    "name": "Assign Patient",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{local}}/api/v1/doctors/assign-patient?patient_email=patient@example.com",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "doctors",
+                                "assign-patient"
+                            ],
+                            "query": [
+                                {
+                                    "key": "patient_email",
+                                    "value": "patient@example.com"
+                                }
+                            ]
+                        },
+                        "description": "Doctor assigns a patient by their email. Requires doctor role."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "My Patients",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{local}}/api/v1/doctors/my-patients",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "doctors",
+                                "my-patients"
+                            ]
+                        },
+                        "description": "Doctor lists all their assigned patients."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "My Doctors",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{local}}/api/v1/doctors/my-doctors",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "doctors",
+                                "my-doctors"
+                            ]
+                        },
+                        "description": "Patient lists all doctors who have access to their data."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Revoke Doctor Access",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{local}}/api/v1/doctors/revoke/7",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "doctors",
+                                "revoke",
+                                "7"
+                            ]
+                        },
+                        "description": "Patient revokes a doctor's access. Replace 7 with the doctor's user ID."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Events (Treatments)",
+            "item": [
+                {
+                    "name": "GET Treatments",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{local}}/api/v1/treatments",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "treatments"
+                            ]
+                        },
+                        "description": "Fetch all events (treatments) for the tenant."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "POST Treatment (Event)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"eventType\": \"Meal Bolus\",\n  \"carbs\": 45,\n  \"insulin\": 3.5,\n  \"notes\": \"Lunch time\",\n  \"date\": 1772308458626,\n  \"dateString\": \"2026-02-28T19:54:18.626Z\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{local}}/api/v1/treatments",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "treatments"
+                            ]
+                        },
+                        "description": "Create a new event/treatment."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "DELETE Treatment",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{local}}/api/v1/treatments/{id}",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "treatments",
+                                "{id}"
+                            ]
+                        },
+                        "description": "Delete a treatment by its ObjectId."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "AI Agent (Voice & Chat)",
+            "item": [
+                {
+                    "name": "POST Chat Text",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"message\": \"I ate 50g of carbs, took 4 units of insulin, and went for a 20 minute walk today. Show me the trends for this week based on this.\",\n  \"timezone_offset\": -330\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{local}}/api/v1/chat/text",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "chat",
+                                "text"
+                            ]
+                        },
+                        "description": "Send natural language text to extract events and get AI insights via AWS Bedrock."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "POST Chat Voice",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "file",
+                                    "type": "file",
+                                    "src": []
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{local}}/api/v1/chat/voice?timezone_offset=-330",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "chat",
+                                "voice"
+                            ],
+                            "query": [
+                                {
+                                    "key": "timezone_offset",
+                                    "value": "-330",
+                                    "description": "User local offset in minutes (e.g., -330 for IST)"
+                                }
+                            ]
+                        },
+                        "description": "Upload an audio file to be transcribed by AWS Transcribe and processed by Bedrock."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "GET Chat History",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{local}}/api/v1/chat/history?limit=50&skip=0",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "chat",
+                                "history"
+                            ],
+                            "query": [
+                                {
+                                    "key": "limit",
+                                    "value": "50"
+                                },
+                                {
+                                    "key": "skip",
+                                    "value": "0"
+                                }
+                            ]
+                        },
+                        "description": "Retrieve previous conversations with the AI assistant."
+                    },
+                    "response": []
+                }
+            ]
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "https://onetwenty.dev",
+            "type": "string"
+        },
+        {
+            "key": "slug",
+            "value": "ayush",
+            "type": "string"
+        },
+        {
+            "key": "access_token",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "refresh_token",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "api_secret_hash",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "subdomain_url",
+            "value": ""
+        },
+        {
+            "key": "subdomain_url_without_https",
+            "value": ""
+        },
+        {
+            "key": "local",
+            "value": "http://localhost:8000",
+            "type": "string"
+        }
+    ]
+}
