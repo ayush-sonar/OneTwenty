@@ -18,7 +18,9 @@ class UserRepository:
         cursor = conn.cursor()
         try:
             cursor.execute(
-                "SELECT id, public_id, email, hashed_password, role, tier, is_active FROM users WHERE email = %s", 
+                """SELECT id, public_id, email, hashed_password, role, tier, is_active,
+                          name, additional_data
+                   FROM users WHERE email = %s""",
                 (email,)
             )
             row = cursor.fetchone()
@@ -30,23 +32,30 @@ class UserRepository:
                     "hashed_password": row[3],
                     "role": row[4],
                     "tier": row[5],
-                    "is_active": row[6]
+                    "is_active": row[6],
+                    "name": row[7],
+                    "additional_data": row[8] or {},
                 }
             return None
         finally:
             cursor.close()
             conn.close()
 
-    def create(self, email: str, hashed_password: str) -> Dict[str, Any]:
+    def create(
+        self,
+        email: str,
+        hashed_password: str,
+        name: Optional[str] = None,
+        additional_data: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         conn = get_db_connection()
         cursor = conn.cursor()
         try:
             public_id = self._generate_public_id()
-            # Also create a default tenant? Yes, 1:1 for now is simplest for SaaS onboarding
             tenant_public_id = self._generate_public_id()
-            
-            # Start Transaction
-            # 1. Create Tenant with default settings
+            additional_data = additional_data or {}
+
+            # 1. Create Tenant
             cursor.execute(
                 "INSERT INTO tenants (public_id, name, slug, settings) VALUES (%s, %s, %s, %s) RETURNING id",
                 (tenant_public_id, f"{email}'s OneTwenty", tenant_public_id.lower(), json.dumps(DEFAULT_TENANT_SETTINGS)) 
@@ -55,26 +64,31 @@ class UserRepository:
 
             # 2. Create User
             cursor.execute(
-                "INSERT INTO users (public_id, email, hashed_password) VALUES (%s, %s, %s) RETURNING id, public_id, email, is_active",
-                (public_id, email, hashed_password)
+                """INSERT INTO users (public_id, email, hashed_password, name, additional_data)
+                   VALUES (%s, %s, %s, %s, %s)
+                   RETURNING id, public_id, email, is_active, name, additional_data""",
+                (public_id, email, hashed_password, name, json.dumps(additional_data))
             )
             user_row = cursor.fetchone()
             user_id = user_row[0]
-            
-            # 3. Link User to Tenant (Owner)
+
+            # 3. Link to Tenant
             cursor.execute(
                 "INSERT INTO tenant_users (user_id, tenant_id, role) VALUES (%s, %s, 'owner')",
                 (user_id, tenant_id)
             )
 
             conn.commit()
-            
+
             return {
                 "id": user_id,
                 "public_id": user_row[1],
                 "email": user_row[2],
                 "is_active": user_row[3],
-                "tenant_id": tenant_id
+                "name": user_row[4],
+                "additional_data": user_row[5] or {},
+                "tenant_id": tenant_id,
+                "tenant_slug": tenant_public_id.lower(),
             }
         except Exception as e:
             conn.rollback()
@@ -82,16 +96,14 @@ class UserRepository:
         finally:
             cursor.close()
             conn.close()
-            
+
     def create_api_key(self, tenant_id: int, description: str = "Default") -> str:
         conn = get_db_connection()
         cursor = conn.cursor()
         try:
-            # Generate key: 10char prefix + 32char random
             prefix = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(10))
             secret = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(32))
             key_value = f"{prefix}_{secret}"
-            
             cursor.execute(
                 "INSERT INTO api_keys (tenant_id, key_value, description) VALUES (%s, %s, %s) RETURNING key_value",
                 (tenant_id, key_value, description)
@@ -111,9 +123,7 @@ class UserRepository:
                 (tenant_id,)
             )
             row = cursor.fetchone()
-            if row:
-                return row[0]
-            return None
+            return row[0] if row else None
         finally:
             cursor.close()
             conn.close()
@@ -122,25 +132,30 @@ class UserRepository:
         conn = get_db_connection()
         cursor = conn.cursor()
         try:
-            cursor.execute(
-                "UPDATE api_keys SET is_active = FALSE WHERE tenant_id = %s",
-                (tenant_id,)
-            )
+            cursor.execute("UPDATE api_keys SET is_active = FALSE WHERE tenant_id = %s", (tenant_id,))
             conn.commit()
         finally:
             cursor.close()
             conn.close()
 
-    def get_tenant_for_user(self, user_id: int) -> int:
-         conn = get_db_connection()
-         cursor = conn.cursor()
-         try:
-             # Just get the first tenant they own for now
-             cursor.execute("SELECT tenant_id FROM tenant_users WHERE user_id = %s LIMIT 1", (user_id,))
-             row = cursor.fetchone()
-             if row:
-                 return row[0]
-             return None
-         finally:
-             cursor.close()
-             conn.close()
+    def get_tenant_for_user(self, user_id: int) -> Optional[int]:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT tenant_id FROM tenant_users WHERE user_id = %s LIMIT 1", (user_id,))
+            row = cursor.fetchone()
+            return row[0] if row else None
+        finally:
+            cursor.close()
+            conn.close()
+
+    def get_tenant_slug(self, tenant_id: int) -> Optional[str]:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT slug FROM tenants WHERE id = %s", (tenant_id,))
+            row = cursor.fetchone()
+            return row[0] if row else None
+        finally:
+            cursor.close()
+            conn.close()

@@ -1,18 +1,37 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, List, Literal, Any, Dict
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str = Field(..., min_length=8, max_length=72, description="Password must be between 8 and 72 characters")
+    password: str = Field(..., min_length=8, max_length=72)
+    name: Optional[str] = Field(None, max_length=255)
+    # All onboarding/personalization data goes here — flexible, app can send any fields
+    additional_data: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    # Example additional_data contents:
+    # {
+    #   "goals": ["manage_glucose", "reduce_stress"],
+    #   "diabetes_type": "type1",
+    #   "units": "mg/dl",
+    #   "onboarding_completed": true
+    # }
 
 class UserLogin(BaseModel):
-    user_id: str # Can be email or public_id
+    user_id: str  # Email or public_id
     password: str
+
+class UserProfile(BaseModel):
+    """Embedded in login/signup responses so the app has what it needs immediately."""
+    user_id: str
+    email: str
+    name: Optional[str]
+    additional_data: Dict[str, Any]
+    tenant_slug: Optional[str]
 
 class Token(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str
+    user: Optional[UserProfile] = None  # Returned on login/signup
 
 class TokenData(BaseModel):
     user_id: Optional[str] = None

@@ -2,70 +2,83 @@ from typing import Any, Dict, Optional
 from fastapi import HTTPException, status
 from app.repositories.user import UserRepository
 from app.core import security
-from app.schemas.auth import UserCreate, UserLogin, Token, TokenData
+from app.schemas.auth import UserCreate, UserLogin, Token, UserProfile
 
 class AuthService:
     def __init__(self):
         self.user_repo = UserRepository()
 
+    def _build_user_profile(self, user: Dict[str, Any], tenant_slug: Optional[str]) -> UserProfile:
+        return UserProfile(
+            user_id=user["public_id"],
+            email=user["email"],
+            name=user.get("name"),
+            additional_data=user.get("additional_data") or {},
+            tenant_slug=tenant_slug,
+        )
+
     def signup(self, user_in: UserCreate) -> Dict[str, Any]:
         """
         Registers a new user + tenant.
+        Returns tokens + profile immediately — no second login call needed.
         """
-        existing_user = self.user_repo.get_by_email(user_in.email)
-        if existing_user:
+        if self.user_repo.get_by_email(user_in.email):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User with this email already exists"
             )
-        
+
         hashed_password = security.get_password_hash(user_in.password)
-        user = self.user_repo.create(email=user_in.email, hashed_password=hashed_password)
-        return user
+        user = self.user_repo.create(
+            email=user_in.email,
+            hashed_password=hashed_password,
+            name=user_in.name,
+            additional_data=user_in.additional_data or {},
+        )
+
+        access_token = security.create_access_token(subject=user["id"])
+        refresh_token = security.create_refresh_token(subject=user["id"])
+        profile = self._build_user_profile(user, tenant_slug=user.get("tenant_slug"))
+
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "profile": profile,
+        }
 
     def login(self, login_in: UserLogin) -> Token:
-        """
-        Authenticates a user via email (as user_id) or public_id?
-        The prompt said "only take user_id and password". 
-        I will assume user_id typically means email.
-        """
         user = self.user_repo.get_by_email(login_in.user_id)
         if not user or not security.verify_password(login_in.password, user["hashed_password"]):
-             raise HTTPException(
+            raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect username or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        
+
+        tenant_id = self.user_repo.get_tenant_for_user(user["id"])
+        tenant_slug = self.user_repo.get_tenant_slug(tenant_id) if tenant_id else None
+
         access_token = security.create_access_token(subject=user["id"])
         refresh_token = security.create_refresh_token(subject=user["id"])
-        
+        profile = self._build_user_profile(user, tenant_slug=tenant_slug)
+
         return Token(
             access_token=access_token,
             refresh_token=refresh_token,
-            token_type="bearer"
+            token_type="bearer",
+            user=profile,
         )
-        
+
     def get_or_create_api_key(self, user_id: int) -> str:
-        # Get user's primary tenant
         tenant_id = self.user_repo.get_tenant_for_user(user_id)
         if not tenant_id:
-             raise HTTPException(status_code=404, detail="User has no tenant")
-        
-        # Check for existing key
+            raise HTTPException(status_code=404, detail="User has no tenant")
         existing_key = self.user_repo.get_active_api_key(tenant_id)
-        if existing_key:
-            return existing_key
-
-        return self.user_repo.create_api_key(tenant_id)
+        return existing_key or self.user_repo.create_api_key(tenant_id)
 
     def rotate_api_key(self, user_id: int) -> str:
         tenant_id = self.user_repo.get_tenant_for_user(user_id)
         if not tenant_id:
-             raise HTTPException(status_code=404, detail="User has no tenant")
-        
-        # Revoke all existing keys
+            raise HTTPException(status_code=404, detail="User has no tenant")
         self.user_repo.revoke_api_keys(tenant_id)
-        
-        # Create new one
         return self.user_repo.create_api_key(tenant_id, description="Rotated Key")
