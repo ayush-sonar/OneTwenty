@@ -21,3 +21,4 @@ pandas
 matplotlib
 fpdf2
 jinja2
+weasyprint
