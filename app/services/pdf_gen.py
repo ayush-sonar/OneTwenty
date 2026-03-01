@@ -67,7 +67,9 @@ class PDFGenerator:
 
         # 3. Render HTML
         logger.info(f"[PDF] Rendering template for {len(daily_data)} days...")
+        render_start = time.time()
         html_content = template.render(**template_vars)
+        logger.info(f"[PDF] Render complete in {time.time() - render_start:.2f}s")
         
         # 4. Browser Selection
         import platform
@@ -113,9 +115,11 @@ class PDFGenerator:
             ]
             
             logger.info(f"[PDF] Executing browser: {browser_path}")
+            browser_start = time.time()
             try:
                 # Add a 30-second timeout to prevent the API from hanging forever.
                 res = subprocess.run(args, check=True, capture_output=True, text=True, timeout=30)
+                logger.info(f"[PDF] Browser execution took {time.time() - browser_start:.2f}s")
                 
                 if not os.path.exists(pdf_path):
                     err_msg = f"Browser finished (0) but {pdf_path} MISSING.\nStderr: {res.stderr}"
@@ -138,6 +142,8 @@ class PDFGenerator:
 
     def upload_and_presign(self, pdf_content: bytes, tenant_id: str) -> str:
         """Uploads to S3 and returns a pre-signed URL valid for 1 hour."""
+        import time
+        s3_start = time.time()
         filename = f"reports/{tenant_id}_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
         
         self.s3_client.put_object(
@@ -152,4 +158,5 @@ class PDFGenerator:
             Params={'Bucket': self.bucket_name, 'Key': filename},
             ExpiresIn=3600
         )
+        logger.info(f"[PDF] S3 upload and presign took {time.time() - s3_start:.2f}s")
         return url
