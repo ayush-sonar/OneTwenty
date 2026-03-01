@@ -19,6 +19,9 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         
         # Start timer
         start_time = time.time()
+
+        if request.scope.get("type") != "http" or request.headers.get("upgrade") == "websocket":
+            return await call_next(request)
         
         # Read request body (for POST/PUT/PATCH)
         request_body = None
