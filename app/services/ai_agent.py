@@ -48,13 +48,15 @@ TIME PARSING:
 
 ---
 
-OUTPUT FORMAT (always return this exact JSON structure, no exceptions):
+OUTPUT FORMAT (IMPORTANT):
+Return ONLY a valid JSON object. Do not include any preamble, markdown code blocks, or post-text.
+The structure must be exactly as follows:
 {
   "extracted_events": [ ...event objects... ],
   "ai_response": "Your warm, human response here."
 }
 
-If the message has no loggable data (e.g., a question or greeting), return an empty array for extracted_events and just respond naturally as Priya.
+If the message has no loggable data (e.g., a question or greeting), return an empty array for extracted_events and just respond naturally as Priya in the ai_response field.
 
 ---
 
@@ -163,9 +165,7 @@ class AIAgentService:
             return result_dict
                 
         except Exception as e:
-            msg = text_result if 'text_result' in locals() else 'None'
-            print(f"Bedrock Error or JSON Parsing Failed: {str(e)}\nRaw: {msg}")
-            return {
-                "extracted_events": [],
-                "ai_response": f"I couldn't process that properly due to an error: {str(e)}"
-            }
+            text_result = locals().get('text_result', 'None')
+            print(f"Bedrock Error or JSON Parsing Failed: {str(e)}\nRaw: {text_result}")
+            # Raise the exception so the endpoint can decide not to save the chat history
+            raise e
