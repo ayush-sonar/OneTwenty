@@ -7,19 +7,12 @@ from app.core.config import settings
 import logging
 logger = logging.getLogger("OneTwenty")
 
+from app.services.s3 import s3_service
+
 class PDFGenerator:
     def __init__(self):
-        self.s3_client = boto3.client(
-            's3',
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-            region_name=settings.AWS_REGION,
-            config=Config(
-                signature_version='s3v4',
-                s3={'addressing_style': 'virtual'}
-            )
-        )
-        self.bucket_name = settings.AWS_S3_BUCKET
+        # We can keep empty or just remove entirely if not needed elsewhere
+        pass
 
     def create_pdf(self, report_data: dict, user_info: dict) -> bytes:
         """Assembles the premium PDF using Jinja2 and WeasyPrint (Browser-less)."""
@@ -68,39 +61,26 @@ class PDFGenerator:
         html_content = template.render(**template_vars)
         logger.info(f"[PDF] Render complete in {time.time() - render_start:.2f}s")
 
-        # 4. Generate PDF using WeasyPrint
         try:
             logger.info("[PDF] Executing WeasyPrint conversion...")
-            wp_start = time.time()
-            
-            # WeasyPrint can render directly from the HTML string.
-            # We provide base_url so it can find local assets if any exist.
             pdf_bytes = HTML(string=html_content, base_url=template_dir).write_pdf()
-            
             logger.info(f"[PDF] Successfully created PDF ({len(pdf_bytes)} bytes) in {time.time() - start_time:.2f}s")
             return pdf_bytes
-            
         except Exception as e:
             logger.error(f"[PDF] WeasyPrint error: {str(e)}")
             raise Exception(f"PDF generation failed via WeasyPrint: {str(e)}")
 
-    def upload_and_presign(self, pdf_content: bytes, tenant_id: str) -> str:
-        """Uploads to S3 and returns a pre-signed URL valid for 1 hour."""
-        import time
-        s3_start = time.time()
+    def upload_to_s3(self, pdf_content: bytes, tenant_id: str) -> str:
+        """Uploads to S3 and returns the S3 Key."""
         filename = f"reports/{tenant_id}_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
-        
-        self.s3_client.put_object(
-            Bucket=self.bucket_name,
-            Key=filename,
-            Body=pdf_content,
-            ContentType='application/pdf'
-        )
-        
-        url = self.s3_client.generate_presigned_url(
-            'get_object',
-            Params={'Bucket': self.bucket_name, 'Key': filename},
-            ExpiresIn=3600
-        )
-        logger.info(f"[PDF] S3 upload and presign took {time.time() - s3_start:.2f}s")
-        return url
+        return s3_service.upload_file(pdf_content, filename, "application/pdf")
+
+    def get_presigned_url(self, s3_key: str, expires_in: int = 3600) -> str:
+        """Generates a pre-signed URL for an existing S3 Key."""
+        return s3_service.get_presigned_url(s3_key, expires_in)
+
+    def upload_and_presign(self, pdf_content: bytes, tenant_id: str) -> tuple[str, str]:
+        """Uploads to S3 and returns (presigned_url, s3_key)."""
+        s3_key = self.upload_to_s3(pdf_content, tenant_id)
+        url = self.get_presigned_url(s3_key)
+        return url, s3_key

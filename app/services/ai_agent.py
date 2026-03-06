@@ -56,6 +56,8 @@ The structure must be exactly as follows:
   "ai_response": "Your warm, human response here."
 }
 
+IMPORTANT: Do NOT include any comments (like // or /* */) inside the JSON. Standard JSON parsers will fail.
+
 If the message has no loggable data (e.g., a question or greeting), return an empty array for extracted_events and just respond naturally as Priya in the ai_response field.
 
 ---
@@ -139,7 +141,13 @@ class AIAgentService:
             if not json_match:
                 raise ValueError("No JSON found in response")
             
-            result_dict = json.loads(json_match.group(1), strict=False)
+            clean_json = json_match.group(1)
+            # Remove single-line comments // ...
+            clean_json = re.sub(r'//.*?\n', '\n', clean_json)
+            # Remove multi-line comments /* ... */
+            clean_json = re.sub(r'/\*.*?\*/', '', clean_json, flags=re.DOTALL)
+            
+            result_dict = json.loads(clean_json, strict=False)
             
             # Post-process events: convert local_time_string to UTC Unix MS & ISO
             events = result_dict.get("extracted_events", [])

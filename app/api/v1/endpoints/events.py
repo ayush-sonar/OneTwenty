@@ -7,7 +7,7 @@ from bson.errors import InvalidId
 
 router = APIRouter()
 
-@router.post("/", response_model=Any)
+@router.post("", response_model=Any)
 async def create_event(
     event_in: Union[EventCreate, List[EventCreate]],
     tenant_id: str = Depends(deps.get_current_tenant_from_api_secret_or_jwt),
@@ -26,7 +26,7 @@ async def create_event(
         created_event = await repo.create(tenant_id, event_in)
         return {"status": "ok", "inserted": 1, "event": created_event}
 
-@router.get("/", response_model=List[Any])
+@router.get("", response_model=List[Any])
 async def read_events(
     count: int = Query(10, le=1000),
     skip: int = Query(0, ge=0),

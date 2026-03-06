@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import entries, auth, status, doctors, websocket, chat, events, reports, clock
+from app.api.v1.endpoints import entries, auth, status, doctors, websocket, chat, events, reports, clock, documents
 
 api_router = APIRouter()
 api_router.include_router(entries.router, tags=["entries"])
@@ -11,3 +11,4 @@ api_router.include_router(events.router, prefix="/treatments", tags=["treatments
 api_router.include_router(chat.router, prefix="/chat", tags=["chat", "ai"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(clock.router, tags=["clock"])
+api_router.include_router(documents.router, prefix="/documents", tags=["documents"])

@@ -1635,6 +1635,69 @@
                     }
                 }
             ]
+        },
+        {
+            "name": "Documents",
+            "item": [
+                {
+                    "name": "Upload Document",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "file",
+                                    "type": "file",
+                                    "src": []
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{local}}/api/v1/documents/upload",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "documents",
+                                "upload"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "List Documents",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{local}}/api/v1/documents/",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "documents",
+                                ""
+                            ]
+                        }
+                    }
+                }
+            ]
         }
     ],
     "variable": [

@@ -17,10 +17,34 @@ async def list_reports(
     db = Depends(get_mongo_db)
 ):
     """
-    Returns a list of all generated reports for the tenant.
+    Returns a list of all generated reports for the tenant with fresh pre-signed URLs.
     """
     repo = ReportRepository(db)
     reports = await repo.get_reports(tenant_id)
+    pdf_gen = PDFGenerator()
+    
+    for report in reports:
+        s3_key = report.get("s3_key")
+        
+        # Legacy support: extract key from URL if missing
+        if not s3_key and "report_url" in report:
+            url = report["report_url"]
+            try:
+                # e.g. https://.../reports/6_20260305_183914.pdf?...
+                path = url.split('?')[0]
+                if '/reports/' in path:
+                    s3_key = 'reports/' + path.split('/reports/')[-1]
+            except Exception:
+                pass
+        
+        if s3_key:
+            try:
+                # Generate a fresh pre-signed URL (1 hour validity)
+                report["report_url"] = pdf_gen.get_presigned_url(s3_key)
+                report["expires_in"] = 3600
+            except Exception as e:
+                print(f"Failed to re-sign report {report.get('_id')}: {e}")
+
     return {
         "status": "success",
         "reports": reports
@@ -44,6 +68,19 @@ async def generate_report(
     report_service = ReportService(entries_repo, event_repo)
     pdf_gen = PDFGenerator()
     
+    # 0. Check if report already exists for today
+    existing_report = await report_repo.get_latest_report_by_range(tenant_id, range)
+    if existing_report and existing_report.get("s3_key"):
+        # Generate a fresh pre-signed URL for the existing file
+        presigned_url = pdf_gen.get_presigned_url(existing_report["s3_key"])
+        return {
+            "status": "success",
+            "range": range,
+            "report_url": presigned_url,
+            "expires_in": 3600,
+            "cached": True
+        }
+
     # 1. Get Owner Details
     owner = user_repo.get_owner_details(int(tenant_id))
     if not owner:
@@ -70,12 +107,13 @@ async def generate_report(
              # Fallback if bucket not configured in secrets
              raise HTTPException(status_code=500, detail="S3 Bucket not configured in settings.")
              
-        presigned_url = pdf_gen.upload_and_presign(pdf_content, tenant_id)
+        presigned_url, s3_key = pdf_gen.upload_and_presign(pdf_content, tenant_id)
         
         # 5. Save metadata to MongoDB
         report_meta = {
             "range": range,
             "report_url": presigned_url,
+            "s3_key": s3_key,
             "expires_in": 3600
         }
         await report_repo.save_report(tenant_id, report_meta)
@@ -84,7 +122,8 @@ async def generate_report(
             "status": "success",
             "range": range,
             "report_url": presigned_url,
-            "expires_in": 3600
+            "expires_in": 3600,
+            "cached": False
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"S3 Upload failed: {str(e)}")
