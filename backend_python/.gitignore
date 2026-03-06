@@ -1,7 +1,0 @@
-__pycache__/
-venv/
-.env
-secrets.json
-
-nightscout-key.pem
-*.pem

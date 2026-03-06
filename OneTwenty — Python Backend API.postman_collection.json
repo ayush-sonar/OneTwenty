@@ -1,8 +1,8 @@
 {
     "info": {
         "_postman_id": "1087dc7e-ffb4-4aab-a4f5-4fb749a8580c",
-        "name": "OneTwenty \u2014 Python Backend API",
-        "description": "All HTTP API endpoints for the OneTwenty multi-tenant Nightscout backend.\n\nBase URL: https://{{slug}}.onetwenty.dev/api/v1\n\nVariables:\n  base_url   = https://onetwenty.dev\n  slug       = ayush  (your tenant slug)\n  access_token  = <JWT access token from /auth/login>\n  api_secret_hash = <SHA-1 hash of your API secret>",
+        "name": "OneTwenty — Python Backend API",
+        "description": "All HTTP API endpoints for the OneTwenty multi-tenant OneTwenty backend.\n\nBase URL: https://{{slug}}.onetwenty.dev/api/v1\n\nVariables:\n  base_url   = https://onetwenty.dev\n  slug       = ayush  (your tenant slug)\n  access_token  = <JWT access token from /auth/login>\n  api_secret_hash = <SHA-1 hash of your API secret>",
         "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
         "_exporter_id": "30812963"
     },
@@ -200,7 +200,7 @@
                                 "reset-api-secret"
                             ]
                         },
-                        "description": "Revoke the current API secret and generate a new one. \u26a0\ufe0f All uploaders using the old secret will break."
+                        "description": "Revoke the current API secret and generate a new one. ⚠️ All uploaders using the old secret will break."
                     },
                     "response": []
                 },
@@ -257,6 +257,45 @@
                         "description": "Get current user's profile including tenant info and subdomain URL."
                     },
                     "response": []
+                },
+                {
+                    "name": "Update Details",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"name\": \"Ayush Sonar\",\n  \"dob\": \"2000-01-01\",\n  \"diabetes_type\": \"type1\",\n  \"insulin_types\": [\"Novolog\", \"Lantus\"],\n  \"additional_data\": {\n    \"units\": \"mg/dl\",\n    \"goals\": [\"stable_bg\"]\n  }\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{local}}/api/v1/auth/details",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "auth",
+                                "details"
+                            ]
+                        },
+                        "description": "Update user profile details (onboarding data)."
+                    },
+                    "response": []
                 }
             ]
         },
@@ -264,7 +303,7 @@
             "name": "Status & Settings",
             "item": [
                 {
-                    "name": "Status \u2014 Subdomain (public)",
+                    "name": "Status — Subdomain (public)",
                     "protocolProfileBehavior": {
                         "disabledSystemHeaders": {
                             "accept": true,
@@ -296,12 +335,12 @@
                                 "status"
                             ]
                         },
-                        "description": "Fetch server status and tenant configuration. No auth needed \u2014 tenant resolved from subdomain."
+                        "description": "Fetch server status and tenant configuration. No auth needed — tenant resolved from subdomain."
                     },
                     "response": []
                 },
                 {
-                    "name": "Status \u2014 API Secret",
+                    "name": "Status — API Secret",
                     "request": {
                         "method": "GET",
                         "header": [
@@ -326,7 +365,7 @@
                     "response": []
                 },
                 {
-                    "name": "Status \u2014 JWT",
+                    "name": "Status — JWT",
                     "request": {
                         "method": "GET",
                         "header": [
@@ -406,7 +445,7 @@
                                 "settings"
                             ]
                         },
-                        "description": "Update tenant settings. Accepts partial updates \u2014 only provided fields are merged."
+                        "description": "Update tenant settings. Accepts partial updates — only provided fields are merged."
                     },
                     "response": []
                 }
@@ -416,7 +455,7 @@
             "name": "Entries (CGM Data)",
             "item": [
                 {
-                    "name": "GET Entries \u2014 Latest 10 (subdomain)",
+                    "name": "GET Entries — Latest 10 (subdomain)",
                     "request": {
                         "method": "GET",
                         "header": [],
@@ -434,12 +473,12 @@
                                 "entries"
                             ]
                         },
-                        "description": "Fetch the latest 10 entries. Tenant resolved from subdomain \u2014 no auth header needed."
+                        "description": "Fetch the latest 10 entries. Tenant resolved from subdomain — no auth header needed."
                     },
                     "response": []
                 },
                 {
-                    "name": "GET Entries \u2014 count=50",
+                    "name": "GET Entries — count=50",
                     "request": {
                         "method": "GET",
                         "header": [],
@@ -467,7 +506,7 @@
                     "response": []
                 },
                 {
-                    "name": "GET Entries \u2014 Last 2 hours",
+                    "name": "GET Entries — Last 2 hours",
                     "request": {
                         "method": "GET",
                         "header": [],
@@ -495,7 +534,7 @@
                     "response": []
                 },
                 {
-                    "name": "GET Entries \u2014 Last 24 hours",
+                    "name": "GET Entries — Last 24 hours",
                     "request": {
                         "method": "GET",
                         "header": [],
@@ -523,7 +562,7 @@
                     "response": []
                 },
                 {
-                    "name": "GET Entries \u2014 ISO timestamp range",
+                    "name": "GET Entries — ISO timestamp range",
                     "request": {
                         "method": "GET",
                         "header": [],
@@ -555,7 +594,7 @@
                     "response": []
                 },
                 {
-                    "name": "GET Entries \u2014 Unix ms range",
+                    "name": "GET Entries — Unix ms range",
                     "request": {
                         "method": "GET",
                         "header": [],
@@ -587,7 +626,7 @@
                     "response": []
                 },
                 {
-                    "name": "GET Entries \u2014 API Secret",
+                    "name": "GET Entries — API Secret",
                     "request": {
                         "method": "GET",
                         "header": [
@@ -614,7 +653,7 @@
                     "response": []
                 },
                 {
-                    "name": "GET Entries \u2014 JWT",
+                    "name": "GET Entries — JWT",
                     "request": {
                         "method": "GET",
                         "header": [
@@ -641,7 +680,7 @@
                     "response": []
                 },
                 {
-                    "name": "GET Entries \u2014 find[sgv][$gte]=120",
+                    "name": "GET Entries — find[sgv][$gte]=120",
                     "request": {
                         "method": "GET",
                         "header": [],
@@ -665,12 +704,12 @@
                                 }
                             ]
                         },
-                        "description": "Nightscout find[] query syntax. Filters entries where sgv \u2265 120."
+                        "description": "OneTwenty find[] query syntax. Filters entries where sgv ≥ 120."
                     },
                     "response": []
                 },
                 {
-                    "name": "GET Entries \u2014 find[type]=mbg",
+                    "name": "GET Entries — find[type]=mbg",
                     "request": {
                         "method": "GET",
                         "header": [],
@@ -699,7 +738,7 @@
                     "response": []
                 },
                 {
-                    "name": "GET Entries/current \u2014 plain (subdomain)",
+                    "name": "GET Entries/current — plain (subdomain)",
                     "request": {
                         "method": "GET",
                         "header": [],
@@ -723,7 +762,7 @@
                     "response": []
                 },
                 {
-                    "name": "GET Entries/current \u2014 TSV (Accept: text/plain)",
+                    "name": "GET Entries/current — TSV (Accept: text/plain)",
                     "request": {
                         "method": "GET",
                         "header": [
@@ -752,7 +791,7 @@
                     "response": []
                 },
                 {
-                    "name": "GET Entries/current \u2014 (.json extension)",
+                    "name": "GET Entries/current — (.json extension)",
                     "request": {
                         "method": "GET",
                         "header": [],
@@ -775,7 +814,7 @@
                     "response": []
                 },
                 {
-                    "name": "GET Entries/current \u2014 API Secret",
+                    "name": "GET Entries/current — API Secret",
                     "request": {
                         "method": "GET",
                         "header": [
@@ -803,7 +842,7 @@
                     "response": []
                 },
                 {
-                    "name": "GET Entries/{spec} \u2014 by ObjectId",
+                    "name": "GET Entries/{spec} — by ObjectId",
                     "request": {
                         "method": "GET",
                         "header": [],
@@ -827,7 +866,7 @@
                     "response": []
                 },
                 {
-                    "name": "GET Entries/{spec} \u2014 by type",
+                    "name": "GET Entries/{spec} — by type",
                     "request": {
                         "method": "GET",
                         "header": [],
@@ -851,7 +890,7 @@
                     "response": []
                 },
                 {
-                    "name": "POST Entries \u2014 single SGV",
+                    "name": "POST Entries — single SGV",
                     "request": {
                         "method": "POST",
                         "header": [
@@ -887,12 +926,12 @@
                                 "entries"
                             ]
                         },
-                        "description": "Upload a single CGM entry. Upserts by (sysTime, type) \u2014 safe to retry."
+                        "description": "Upload a single CGM entry. Upserts by (sysTime, type) — safe to retry."
                     },
                     "response": []
                 },
                 {
-                    "name": "POST Entries \u2014 batch",
+                    "name": "POST Entries — batch",
                     "request": {
                         "method": "POST",
                         "header": [
@@ -973,7 +1012,7 @@
                     "response": []
                 },
                 {
-                    "name": "DELETE Entries/{spec} \u2014 by ObjectId",
+                    "name": "DELETE Entries/{spec} — by ObjectId",
                     "request": {
                         "method": "DELETE",
                         "header": [
@@ -1002,7 +1041,7 @@
                     "response": []
                 },
                 {
-                    "name": "DELETE Entries/{spec} \u2014 by type",
+                    "name": "DELETE Entries/{spec} — by type",
                     "request": {
                         "method": "DELETE",
                         "header": [
@@ -1031,7 +1070,7 @@
                     "response": []
                 },
                 {
-                    "name": "DELETE Entries \u2014 by find[] query",
+                    "name": "DELETE Entries — by find[] query",
                     "request": {
                         "method": "DELETE",
                         "header": [
@@ -1065,7 +1104,7 @@
                     "response": []
                 },
                 {
-                    "name": "GET Entries with Events \u2014 Time Range",
+                    "name": "GET Entries with Events — Time Range",
                     "request": {
                         "method": "GET",
                         "header": [
@@ -1431,6 +1470,232 @@
                         "description": "Retrieve previous conversations with the AI assistant."
                     },
                     "response": []
+                }
+            ]
+        },
+        {
+            "name": "Reports",
+            "item": [
+                {
+                    "name": "Generate Report",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{local}}/api/v1/reports/generate?range=1w",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "reports",
+                                "generate"
+                            ],
+                            "query": [
+                                {
+                                    "key": "range",
+                                    "value": "1w"
+                                }
+                            ]
+                        },
+                        "description": "Generate a PDF report and upload to S3. Returns a pre-signed URL."
+                    }
+                },
+                {
+                    "name": "List Reports",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{local}}/api/v1/reports/",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "reports",
+                                ""
+                            ]
+                        },
+                        "description": "List all previously generated reports for the tenant."
+                    }
+                },
+                {
+                    "name": "Dashboard",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{local}}/api/v1/reports/dashboard?range=7d",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "reports",
+                                "dashboard"
+                            ],
+                            "query": [
+                                {
+                                    "key": "range",
+                                    "value": "7d"
+                                }
+                            ]
+                        },
+                        "description": "Get dashboard metrics and AGP chart data."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "AI Agent (Priya)",
+            "item": [
+                {
+                    "name": "Text Chat",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "api-secret",
+                                "value": "{{api_secret_hash}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"message\": \"I just ate a sandwich with 40g carbs\",\n  \"timezone\": \"Asia/Kolkata\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{local}}/api/v1/chat/text",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "chat",
+                                "text"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "Voice Chat",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "api-secret",
+                                "value": "{{api_secret_hash}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "file",
+                                    "type": "file"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{local}}/api/v1/chat/voice",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "chat",
+                                "voice"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Documents",
+            "item": [
+                {
+                    "name": "Upload Document",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "file",
+                                    "type": "file",
+                                    "src": []
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{local}}/api/v1/documents/upload",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "documents",
+                                "upload"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "name": "List Documents",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{access_token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{local}}/api/v1/documents/",
+                            "host": [
+                                "{{local}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "documents",
+                                ""
+                            ]
+                        }
+                    }
                 }
             ]
         }
