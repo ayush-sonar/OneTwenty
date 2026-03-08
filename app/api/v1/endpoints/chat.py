@@ -8,6 +8,7 @@ from app.api.deps import get_current_tenant_from_api_secret_or_jwt, get_mongo_db
 from app.services.ai_agent import AIAgentService
 from app.repositories.chat import ChatRepository
 from app.repositories.event import EventRepository
+from app.repositories.document import DocumentRepository
 from app.schemas.chat import ChatCreate
 from app.schemas.event import EventCreate
 from app.services.entries import EntriesService
@@ -18,27 +19,67 @@ class TextChatRequest(BaseModel):
     message: str
     timezone_offset: int = 0  # In minutes, e.g., -330 for IST (+5:30)
 
-async def fetch_insight_context(db, tenant_id: str, message: str, timezone_offset: int = 0) -> str:
-    """Conditionally fetches the last 7 days of data if the user is asking for insights."""
-    keywords = ["trend", "insight", "show me", "history", "past", "yesterday", "week", "month", "pattern"]
-    if not any(k in message.lower() for k in keywords):
-        return ""
-        
+async def fetch_health_context(db, tenant_id: str, message: str = "", timezone_offset: int = 0) -> str:
+    """
+    Always fetches and condenses recent bio-data (glucose + events).
+    Adjusts lookback window if keywords like 'week' or 'month' are found.
+    """
     now_ms = int(time.time() * 1000)
-    seven_days_ago = now_ms - (7 * 24 * 60 * 60 * 1000)
+    
+    # Dynamic lookback based on user intent
+    lookback_hours = 48 # Default
+    msg_lower = message.lower()
+    
+    import re
+    # Match "last X hours" or "past X hours" or "for X hours"
+    hour_match = re.search(r'(?:last|past|for|past)\s+(\d+)\s+hour', msg_lower)
+    day_match = re.search(r'(?:last|past|for|past)\s+(\d+)\s+day', msg_lower)
+    
+    if hour_match:
+        lookback_hours = int(hour_match.group(1))
+    elif day_match:
+        lookback_hours = int(day_match.group(1)) * 24
+    elif "week" in msg_lower:
+        lookback_hours = 24 * 7
+    elif "month" in msg_lower:
+        lookback_hours = 24 * 30
+    elif "yesterday" in msg_lower:
+        lookback_hours = 24
+    
+    # Sanity check: cap at 30 days for tokens/performance
+    lookback_hours = min(max(1, lookback_hours), 24 * 30)
+    
+    start_ms = now_ms - (lookback_hours * 60 * 60 * 1000)
     
     entries_service = EntriesService()
     event_repo = EventRepository(db)
     
-    entries_task = entries_service.get_entries_by_timestamp_range(tenant_id=tenant_id, start_ms=seven_days_ago, end_ms=now_ms)
-    events_task = event_repo.get_multi_by_tenant(tenant_id=tenant_id, start_date=seven_days_ago, end_date=now_ms, limit=1000)
+    # Run in parallel for speed
+    entries, events = await asyncio.gather(
+        entries_service.get_entries_by_timestamp_range(tenant_id=tenant_id, start_ms=start_ms, end_ms=now_ms),
+        event_repo.get_multi_by_tenant(tenant_id=tenant_id, start_date=start_ms, end_date=now_ms, limit=300 if lookback_hours > 48 else 100)
+    )
     
-    entries, events = await asyncio.gather(entries_task, events_task)
+    if not entries and not events:
+        return ""
+        
+    return AIAgentService.condense_data(entries, events, timezone_offset)
+
+async def fetch_document_context(db, tenant_id: str, message: str) -> str:
+    """Fetches extracted text from the most recent blood reports if relevant."""
+    keywords = ["report", "blood", "test", "result", "doctor", "lab", "document", "pdf", "what does it say"]
+    if not any(k in message.lower() for k in keywords):
+        return ""
+    
+    repo = DocumentRepository(db)
+    docs = await repo.get_documents(tenant_id, limit=3)
     
     context = []
-    if entries: context.append(f"Recent CGM Readings (sampled): {[e['sgv'] for e in entries[::10]]}")
-    if events: context.append(f"Recent Events: {[{'type': ev['eventType'], 'carbs': ev.get('carbs'), 'insulin': ev.get('insulin')} for ev in events]}")
-    return " | ".join(context)
+    for doc in docs:
+        if doc.get("extracted_text"):
+            context.append(f"Document: {doc['filename']}\nContent: {doc['extracted_text'][:1000]}...")
+            
+    return "\n---\n".join(context)
 
 @router.post("/text")
 async def chat_text(
@@ -52,7 +93,13 @@ async def chat_text(
     start_time = time.time()
     now_ms = int(start_time * 1000)
     
-    historical_context = await fetch_insight_context(db, tenant_id, payload.message, payload.timezone_offset)
+    health_context = await fetch_health_context(db, tenant_id, payload.message, payload.timezone_offset)
+    doc_context = await fetch_document_context(db, tenant_id, payload.message)
+    
+    chat_repo = ChatRepository(db)
+    chat_history = await chat_repo.get_multi_by_tenant(tenant_id=tenant_id, limit=10)
+    # History is usually latest-first, we want oldest-first for the AI context
+    chat_history.reverse()
     
     loop = asyncio.get_event_loop()
     try:
@@ -61,8 +108,10 @@ async def chat_text(
             AIAgentService.process_bedrock_chat,
             payload.message,
             now_ms,
-            historical_context,
-            payload.timezone_offset
+            health_context,
+            doc_context,
+            payload.timezone_offset,
+            chat_history
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI Processing failed: {str(e)}")
@@ -159,13 +208,21 @@ async def chat_voice(
             }
 
         # Parse & Act
+        chat_repo = ChatRepository(db)
+        chat_history = await chat_repo.get_multi_by_tenant(tenant_id=tenant_id, limit=10)
+        chat_history.reverse()
+
+        health_context = await fetch_health_context(db, tenant_id, transcript_text, timezone_offset)
+        doc_context = await fetch_document_context(db, tenant_id, transcript_text)
         bedrock_result = await loop.run_in_executor(
             None, 
             AIAgentService.process_bedrock_chat,
             transcript_text,
             now_ms,
-            "",
-            timezone_offset
+            health_context,
+            doc_context,
+            timezone_offset,
+            chat_history
         )
     except Exception as e:
         print(f"Voice Processing Error: {e}")
