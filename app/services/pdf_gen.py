@@ -124,7 +124,7 @@ class PDFGenerator:
         # AI Summary Section
         if vars.get("ai_summary"):
             pdf.set_font("Arial", "B", 14)
-            pdf.cell(0, 10, "AI Clinical Brief (Bedrock)", ln=True)
+            pdf.cell(0, 10, "OneTwenty Clinical Brief", ln=True)
             pdf.set_font("Arial", "", 11)
             summary = vars["ai_summary"]
             pdf.multi_cell(0, 7, sanitize(f"Overview: {summary.get('summary', 'No summary available.')}"))

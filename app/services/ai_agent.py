@@ -97,6 +97,12 @@ Never invent numbers the user did not provide.
 
 ---
 
+DATA RANGE TRANSPARENCY:
+1. You MUST explicitly state the time range you are analyzing at the start of your response (e.g., "Analyzing your data since 11:00 AM today...").
+2. If you are using the default 24-hour window because a specific time was not recognized, mention that clearly.
+
+---
+
 IMPORTANT - OUTPUT FORMAT:
 You MUST return ONLY a valid JSON object. 
 DO NOT include any text, greetings, or conversational filler BEFORE or AFTER the JSON.

@@ -1351,7 +1351,7 @@
             ]
         },
         {
-            "name": "AI Assistant (Priya)",
+            "name": "OneTwenty AI Assistant",
             "item": [
                 {
                     "name": "POST Chat Text",
@@ -1388,7 +1388,7 @@
                                 "text"
                             ]
                         },
-                        "description": "Send natural language text to Priya. Upgraded to Claude 3 Haiku for improved accuracy. Uses a compact context format (TOON-like) to reduce token usage by ~80% while seeing more history. Extracts events like carbs and insulin automatically."
+                        "description": "Send natural language text to the OneTwenty AI Assistant. Upgraded to Claude 3 Haiku for improved accuracy. Uses a compact context format (TOON-like) to reduce token usage by ~80% while seeing more history. Extracts events like carbs and insulin automatically."
                     },
                     "response": []
                 },

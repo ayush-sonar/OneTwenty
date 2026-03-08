@@ -27,43 +27,81 @@ async def fetch_health_context(db, tenant_id: str, message: str = "", timezone_o
     now_ms = int(time.time() * 1000)
     
     # Dynamic lookback based on user intent
-    lookback_hours = 48 # Default
+    lookback_hours = 24  # Default and fallback
     msg_lower = message.lower()
+    requested_absolute = False
     
     import re
-    # Match "last X hours" or "past X hours" or "for X hours"
-    hour_match = re.search(r'(?:last|past|for|past)\s+(\d+)\s+hour', msg_lower)
-    day_match = re.search(r'(?:last|past|for|past)\s+(\d+)\s+day', msg_lower)
+    import datetime
     
-    if hour_match:
-        lookback_hours = int(hour_match.group(1))
-    elif day_match:
-        lookback_hours = int(day_match.group(1)) * 24
-    elif "week" in msg_lower:
-        lookback_hours = 24 * 7
-    elif "month" in msg_lower:
-        lookback_hours = 24 * 30
-    elif "yesterday" in msg_lower:
-        lookback_hours = 24
+    # 1. Look for absolute time anchors: "since 11am", "from 10:30", etc.
+    time_match = re.search(r'(?:since|from|after)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?', msg_lower)
     
-    # Sanity check: cap at 30 days for tokens/performance
-    lookback_hours = min(max(1, lookback_hours), 24 * 30)
-    
-    start_ms = now_ms - (lookback_hours * 60 * 60 * 1000)
+    if time_match:
+        requested_absolute = True
+        hr = int(time_match.group(1))
+        mn = int(time_match.group(2)) if time_match.group(2) else 0
+        p = time_match.group(3)
+        
+        if p == 'pm' and hr < 12: hr += 12
+        if p == 'am' and hr == 12: hr = 0
+        
+        utc_now = datetime.datetime.fromtimestamp(now_ms / 1000, tz=datetime.timezone.utc)
+        local_now = utc_now - datetime.timedelta(minutes=timezone_offset)
+        anchor_local = local_now.replace(hour=hr, minute=mn, second=0, microsecond=0)
+        
+        if anchor_local > local_now:
+            anchor_local -= datetime.timedelta(days=1)
+            
+        anchor_utc = anchor_local + datetime.timedelta(minutes=timezone_offset)
+        start_ms = int(anchor_utc.timestamp() * 1000)
+        # Update lookback_hours for the limit logic
+        lookback_hours = (now_ms - start_ms) / (1000 * 60 * 60)
+    else:
+        # 2. Relative lookbacks
+        hour_match = re.search(r'(?:last|past|for)\s+(\d+)\s+hour', msg_lower)
+        day_match = re.search(r'(?:last|past|for)\s+(\d+)\s+day', msg_lower)
+        
+        if hour_match:
+            lookback_hours = int(hour_match.group(1))
+        elif day_match:
+            lookback_hours = int(day_match.group(1)) * 24
+        elif "week" in msg_lower:
+            lookback_hours = 24 * 7
+        elif "month" in msg_lower:
+            lookback_hours = 24 * 30
+        elif "yesterday" in msg_lower:
+            lookback_hours = 24
+        
+        lookback_hours = min(max(1, lookback_hours), 24 * 30)
+        start_ms = now_ms - (lookback_hours * 60 * 60 * 1000)
     
     entries_service = EntriesService()
     event_repo = EventRepository(db)
     
-    # Run in parallel for speed
+    # Run in parallel
     entries, events = await asyncio.gather(
         entries_service.get_entries_by_timestamp_range(tenant_id=tenant_id, start_ms=start_ms, end_ms=now_ms),
         event_repo.get_multi_by_tenant(tenant_id=tenant_id, start_date=start_ms, end_date=now_ms, limit=300 if lookback_hours > 48 else 100)
     )
     
+    # FALLBACK LOGIC
+    fallback_note = ""
+    if not entries and not events and requested_absolute:
+        # Try falling back to default 24h if the specific window was empty
+        start_ms_fb = now_ms - (24 * 60 * 60 * 1000)
+        entries, events = await asyncio.gather(
+            entries_service.get_entries_by_timestamp_range(tenant_id=tenant_id, start_ms=start_ms_fb, end_ms=now_ms),
+            event_repo.get_multi_by_tenant(tenant_id=tenant_id, start_date=start_ms_fb, end_date=now_ms, limit=100)
+        )
+        if entries or events:
+            fallback_note = "NOTE: Requested window was empty. Showing last 24 hours instead."
+    
     if not entries and not events:
         return ""
         
-    return AIAgentService.condense_data(entries, events, timezone_offset)
+    condensed = AIAgentService.condense_data(entries, events, timezone_offset)
+    return f"{fallback_note} {condensed}".strip()
 
 async def fetch_document_context(db, tenant_id: str, message: str) -> str:
     """Fetches extracted text from the most recent blood reports if relevant."""
